@@ -147,7 +147,7 @@ class GitHubPluginSource(PluginSource):
 
         # Check if already cached
         if not cache_path.exists():
-            logger.info(f"Repository not cached, cloning from GitHub")
+            logger.info("Repository not cached, cloning from GitHub")
             # Clone the repository
             try:
                 logger.debug(f"Running git clone for {self.repo_url} at {self.version_tag}")

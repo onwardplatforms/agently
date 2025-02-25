@@ -1,5 +1,4 @@
-"""
-OpenAI model provider implementation.
+"""OpenAI model provider implementation.
 
 This module provides integration with OpenAI's API, including:
 - Chat completions with streaming support
@@ -8,7 +7,7 @@ This module provides integration with OpenAI's API, including:
 """
 
 import os
-from typing import AsyncIterator, Optional
+from typing import AsyncIterator, Optional, Any
 
 from semantic_kernel import Kernel
 from semantic_kernel.connectors.ai.function_choice_behavior import (
@@ -60,12 +59,11 @@ class OpenAIProvider(ModelProvider):
         )
         self.service_id = "openai"
 
-    async def chat(self, history: ChatHistory, kernel: Optional[Kernel] = None, **kwargs) -> AsyncIterator[str]:
+    async def chat(self, history: ChatHistory, **kwargs: Any) -> AsyncIterator[str]:
         """Process a chat message using OpenAI's streaming API.
 
         Args:
             history: Chat history to use for context
-            kernel: Optional kernel instance for function calling
             **kwargs: Additional arguments to pass to the API
 
         Yields:
@@ -81,6 +79,9 @@ class OpenAIProvider(ModelProvider):
                 messages=history.messages,
             )
 
+            # Extract kernel from kwargs if provided
+            kernel = kwargs.pop("kernel", None)
+
             # Build settings dictionary from config
             settings = OpenAIChatPromptExecutionSettings(
                 temperature=self.config.temperature,
@@ -94,9 +95,13 @@ class OpenAIProvider(ModelProvider):
             # Add function definitions if kernel is provided
             if kernel:
                 from ..plugins import PluginManager
+                from ..plugins.base import Plugin
+                from typing import cast
 
                 plugin_manager = PluginManager()
-                plugin_manager.plugins = {name: (None, plugin) for name, plugin in kernel.plugins.items()}
+                plugin_manager.plugins = {
+                    name: (cast(None, None), cast(Plugin, plugin)) for name, plugin in kernel.plugins.items()
+                }
                 functions = plugin_manager.get_openai_functions()
                 settings.tools = functions.get("functions", [])
                 settings.tool_choice = functions.get("function_call", "auto")
@@ -139,7 +144,14 @@ class OpenAIProvider(ModelProvider):
 
             async def _make_request():
                 try:
-                    response = await self.client.embeddings.create(model="text-embedding-ada-002", input=text)
+                    # Import OpenAI client directly for embeddings
+                    from openai import AsyncOpenAI
+
+                    # Create a client instance
+                    openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+                    # Get embeddings
+                    response = await openai_client.embeddings.create(model="text-embedding-ada-002", input=text)
                     return response.data[0].embedding
                 except Exception as e:
                     raise ModelError(

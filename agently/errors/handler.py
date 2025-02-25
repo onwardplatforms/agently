@@ -1,6 +1,4 @@
-"""
-Error handling and recovery system for the agent runtime.
-"""
+"""Error handling and recovery system for the agent runtime."""
 
 import asyncio
 import logging

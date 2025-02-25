@@ -1,3 +1,9 @@
+"""Conversation context management for the Agently framework.
+
+This module provides classes for managing conversation context, including
+message representation and conversation history tracking.
+"""
+
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
@@ -6,7 +12,7 @@ from semantic_kernel.contents import ChatHistory
 
 @dataclass
 class Message:
-    """Represents a message in the conversation"""
+    """Represents a message in the conversation."""
 
     content: str
     role: str
@@ -14,7 +20,7 @@ class Message:
 
 
 class ConversationContext:
-    """Manages shared context and state for a conversation"""
+    """Manages shared context and state for a conversation."""
 
     def __init__(self, conversation_id: str):
         self.id = conversation_id
@@ -23,7 +29,7 @@ class ConversationContext:
         self.metadata: Dict[str, Any] = {}
 
     async def add_message(self, message: Message) -> None:
-        """Add a message to the conversation history"""
+        """Add a message to the conversation history."""
         if message.role == "user":
             self.history.add_user_message(message.content)
         elif message.role == "assistant":
@@ -32,13 +38,13 @@ class ConversationContext:
             self.history.add_system_message(message.content)
 
     def get_history(self) -> ChatHistory:
-        """Get the conversation history"""
+        """Get the conversation history."""
         return self.history
 
     async def store_memory(self, key: str, value: Any) -> None:
-        """Store a value in shared memory"""
+        """Store a value in shared memory."""
         self.shared_memory[key] = value
 
     def get_memory(self, key: str) -> Optional[Any]:
-        """Retrieve a value from shared memory"""
+        """Retrieve a value from shared memory."""
         return self.shared_memory.get(key)

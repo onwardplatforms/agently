@@ -1,6 +1,4 @@
-"""
-Core error types and base exceptions for the agent runtime.
-"""
+"""Core error types and base exceptions for the agent runtime."""
 
 from dataclasses import dataclass, field
 from enum import Enum

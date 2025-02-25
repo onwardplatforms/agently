@@ -1,6 +1,4 @@
-"""
-Core functionality for the agent runtime.
-"""
+"""Core functionality for the agent runtime."""
 
 import logging
 import os

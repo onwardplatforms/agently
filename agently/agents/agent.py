@@ -1,5 +1,11 @@
+"""Agent implementation for the Agently framework.
+
+This module provides the core Agent class that manages individual agent behavior,
+including initialization, plugin management, and message processing.
+"""
+
 import logging
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Optional, Any, Dict, List
 
 from semantic_kernel import Kernel
 from semantic_kernel.contents.streaming_chat_message_content import (
@@ -18,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class Agent:
-    """Core agent class that manages individual agent behavior"""
+    """Core agent class that manages individual agent behavior."""
 
     def __init__(self, config: AgentConfig):
         self.config = config
@@ -34,11 +40,13 @@ class Agent:
         self.kernel = Kernel()
         self.provider: Optional[ModelProvider] = None
         self.error_handler = get_error_handler()
-        self.retry_handler = RetryHandler(RetryConfig(max_attempts=2, initial_delay=0.5, max_delay=5.0))
+        self.retry_handler: RetryHandler[Any, Any] = RetryHandler(
+            RetryConfig(max_attempts=2, initial_delay=0.5, max_delay=5.0)
+        )
         logger.info(f"Agent initialized with config: id={self.id}, name={self.name}")
 
     async def _handle_agent_operation(self, operation_name: str, **context_details) -> ErrorContext:
-        """Create error context for agent operations"""
+        """Create error context for agent operations."""
         return ErrorContext(
             component="agent",
             operation=operation_name,
@@ -52,7 +60,7 @@ class Agent:
         cause: Exception = None,
         recovery_hint: Optional[str] = None,
     ) -> AgentError:
-        """Create a standardized agent error"""
+        """Create a standardized agent error."""
         return AgentError(
             message=message,
             context=context,
@@ -61,7 +69,7 @@ class Agent:
         )
 
     async def initialize(self) -> None:
-        """Initialize the agent's resources"""
+        """Initialize the agent's resources."""
         try:
             context = await self._handle_agent_operation("initialize", provider_type=self.config.model.provider)
             logger.debug("Initializing agent with context: %s", context)
@@ -74,14 +82,16 @@ class Agent:
 
                 self.provider = OpenAIProvider(self.config.model)
                 # Register the provider with the kernel
-                self.kernel.add_service(self.provider.client, "openai")
+                if self.provider.client:
+                    self.kernel.add_service(self.provider.client)
                 logger.info(f"OpenAI provider initialized with model: {self.config.model.model}")
             elif provider_type == "ollama":
                 from ..models.ollama import OllamaProvider
 
                 self.provider = OllamaProvider(self.config.model)
                 # Register the provider with the kernel
-                self.kernel.add_service(self.provider.client, "ollama")
+                if self.provider.client:
+                    self.kernel.add_service(self.provider.client)
                 logger.info(f"Ollama provider initialized with model: {self.config.model.model}")
             else:
                 raise ValueError(f"Unsupported provider type: {provider_type}")
@@ -101,7 +111,7 @@ class Agent:
             ) from e
 
     async def _init_plugins(self) -> None:
-        """Initialize agent plugins"""
+        """Initialize agent plugins."""
         try:
             context = await self._handle_agent_operation("init_plugins")
             logger.debug("Initializing plugins with context: %s", context)
@@ -136,7 +146,8 @@ class Agent:
                     # Log available functions
                     kernel_functions = plugin_instance.__class__.get_kernel_functions()
                     logger.debug(
-                        f"Plugin {plugin_instance.name} has {len(kernel_functions)} kernel functions: {list(kernel_functions.keys())}"
+                        f"Plugin {plugin_instance.name} has {len(kernel_functions)} kernel functions: "
+                        f"{list(kernel_functions.keys())}"
                     )
                 except Exception as e:
                     logger.error(f"Error loading plugin: {e}", exc_info=e)
@@ -192,7 +203,7 @@ class Agent:
         return context
 
     async def process_message(self, message: Message, context: ConversationContext) -> AsyncGenerator[str, None]:
-        """Process a message and generate responses"""
+        """Process a message and generate responses."""
         # Initialize operation_context to None before the try block
         operation_context = None
 
@@ -229,12 +240,12 @@ class Agent:
                     from semantic_kernel.connectors.ai.function_choice_behavior import (
                         FunctionChoiceBehavior,
                     )
-                    from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.open_ai_prompt_execution_settings import (
-                        OpenAIChatPromptExecutionSettings,
+                    from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings import (
+                        open_ai_prompt_execution_settings as openai_settings,
                     )
 
                     logger.debug("Creating OpenAI chat settings")
-                    settings = OpenAIChatPromptExecutionSettings(
+                    settings = openai_settings.OpenAIChatPromptExecutionSettings(
                         temperature=self.config.model.temperature,
                         max_tokens=self.config.model.max_tokens,
                         top_p=self.config.model.top_p,
@@ -286,7 +297,8 @@ class Agent:
                                         # Log extra details about the tool message
                                         if hasattr(msg, "function_invoke_attempt"):
                                             logger.debug(
-                                                f"Tool message has function_invoke_attempt: {getattr(msg, 'function_invoke_attempt')}"
+                                                f"Tool message has function_invoke_attempt: "
+                                                f"{getattr(msg, 'function_invoke_attempt')}"
                                             )
                                         if hasattr(msg, "items"):
                                             logger.debug(f"Tool message items: {getattr(msg, 'items')}")
@@ -312,7 +324,7 @@ class Agent:
                         logger.debug(f"Processing {len(streamed_tool_chunks)} tool messages")
                         try:
                             # Group tool chunks by function_invoke_attempt if available
-                            grouped_chunks = {}
+                            grouped_chunks: Dict[int, List[Any]] = {}
                             for chunk in streamed_tool_chunks:
                                 key = getattr(chunk, "function_invoke_attempt", 0)
                                 if key not in grouped_chunks:

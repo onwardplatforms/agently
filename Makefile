@@ -12,7 +12,7 @@ ISORT = $(VENV_BIN)/isort
 MYPY = $(VENV_BIN)/mypy
 AUTOFLAKE = $(VENV_BIN)/autoflake
 SHELL := /bin/bash
-PACKAGE_NAME = .
+PACKAGE_NAME = agently
 ACTIVATE = . $(VENV)/bin/activate &&
 
 # Directories

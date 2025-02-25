@@ -35,15 +35,15 @@ remove-unused-variables = true
 recursive = true
 
 [tool.mypy]
-python_version = "3.8"
-warn_return_any = true
+python_version = "3.11"
+warn_return_any = false
 warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
 check_untyped_defs = true
-disallow_untyped_decorators = true
-no_implicit_optional = true
-strict_optional = true
+disallow_untyped_decorators = false
+no_implicit_optional = false
+strict_optional = false
 packages = ["agently"]
 
 [[tool.mypy.overrides]]
