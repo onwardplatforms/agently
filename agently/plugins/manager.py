@@ -1,3 +1,9 @@
+"""Plugin management for the Agently framework.
+
+This module provides the PluginManager class for loading, executing, and managing
+plugins that extend the functionality of agents.
+"""
+
 import logging
 from pathlib import Path
 from typing import Any, Dict, Optional, Type
@@ -22,7 +28,9 @@ class PluginManager:
         """
         self.config = config or {}
         self.error_handler = get_error_handler()
-        self.retry_handler = RetryHandler(RetryConfig(max_attempts=2, initial_delay=0.5, max_delay=5.0))
+        self.retry_handler: RetryHandler[Any, Any] = RetryHandler(
+            RetryConfig(max_attempts=2, initial_delay=0.5, max_delay=5.0)
+        )
         # Store both the plugin class and instance
         self.plugins: Dict[str, tuple[Type[Plugin], Plugin]] = {}
         logger.info("PluginManager initialized")
@@ -75,7 +83,14 @@ class PluginManager:
             # Log plugin class details
             logger.info(f"Plugin class details: name={plugin_class.name}, description={plugin_class.description}")
             logger.debug(
-                f"Plugin variables: {[name for name, _ in plugin_class.__dict__.items() if hasattr(plugin_class, name) and isinstance(getattr(plugin_class, name), type) and name != 'name']}"
+                "Plugin variables: "
+                + str(
+                    [
+                        name
+                        for name, _ in plugin_class.__dict__.items()
+                        if hasattr(plugin_class, name) and isinstance(getattr(plugin_class, name), type) and name != "name"
+                    ]
+                )
             )
 
             # Create plugin instance with variables
@@ -140,7 +155,7 @@ class PluginManager:
                 return result
 
             logger.debug(f"Executing {plugin_name}.{method_name} with retry")
-            result = await self.retry_handler.execute_with_retry(_execute)
+            result = await self.retry_handler.retry(_execute, context)
             logger.info(f"Execution of {plugin_name}.{method_name} completed successfully")
             return result
 
@@ -217,7 +232,7 @@ class PluginManager:
 
             for func_name, func in kernel_functions.items():
                 # Convert each function to OpenAI format
-                function_def = {
+                function_def: Dict[str, Any] = {
                     "name": f"{plugin_instance.name}_{func_name}",
                     "description": func.__doc__ or "",
                     "parameters": {"type": "object", "properties": {}, "required": []},
@@ -238,9 +253,11 @@ class PluginManager:
 
                     # Mark as required if no default value
                     if param.default == inspect.Parameter.empty:
-                        function_def["parameters"]["required"].append(param_name)
+                        required_list = function_def["parameters"]["required"]
+                        required_list.append(param_name)
 
-                    function_def["parameters"]["properties"][param_name] = param_def
+                    properties_dict = function_def["parameters"]["properties"]
+                    properties_dict[param_name] = param_def
 
                 functions.append(function_def)
                 logger.debug(f"Added function definition for {function_def['name']}")

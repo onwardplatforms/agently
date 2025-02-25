@@ -5,17 +5,16 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any, Dict, List, Optional, Union
 from uuid import uuid4
 
 import jsonschema
 import yaml
 from dotenv import load_dotenv
 
+from agently.config.types import AgentConfig, CapabilityConfig, ModelConfig, PluginConfig, PluginSourceType
 from agently.plugins.sources import GitHubPluginSource, LocalPluginSource
 from agently.utils.logging import LogLevel
-
-from .types import AgentConfig, ModelConfig, PluginConfig
 
 logger = logging.getLogger(__name__)
 
@@ -170,17 +169,17 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
         if not os.path.isabs(plugin_path):
             plugin_path = (config_path.parent / plugin_path).resolve()
 
-        source = LocalPluginSource(Path(plugin_path))
-        plugin_configs.append(PluginConfig(source=source, variables=local_plugin.get("variables", {})))
+        local_source: PluginSourceType = LocalPluginSource(Path(plugin_path))
+        plugin_configs.append(PluginConfig(source=local_source, variables=local_plugin.get("variables", {})))
 
     # Process GitHub plugins
     for github_plugin in plugins_yaml.get("github", []):
-        source = GitHubPluginSource(
+        github_source: PluginSourceType = GitHubPluginSource(
             repo_url=github_plugin["repo"],
             version_tag=github_plugin["version"],
             plugin_path=github_plugin["plugin_path"],
         )
-        plugin_configs.append(PluginConfig(source=source, variables=github_plugin.get("variables", {})))
+        plugin_configs.append(PluginConfig(source=github_source, variables=github_plugin.get("variables", {})))
 
     # Set log level
     log_level = LogLevel.NONE  # Default

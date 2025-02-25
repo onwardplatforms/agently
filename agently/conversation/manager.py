@@ -1,3 +1,10 @@
+"""Conversation management for the Agently framework.
+
+This module provides the ConversationManager class for handling conversations
+with agents, including message processing, error handling, and conversation state
+management.
+"""
+
 from typing import Any, AsyncGenerator, AsyncIterator, Dict, List, Optional
 
 from semantic_kernel.contents import ChatHistory
@@ -17,19 +24,21 @@ from .context import ConversationContext, Message
 
 
 class ConversationManager:
-    """Manages conversations with error handling"""
+    """Manages conversations with error handling."""
 
     def __init__(self, agent: Agent, config: Optional[Dict[str, Any]] = None):
         self.agent = agent
         self.config = config or {}
         self.error_handler = get_error_handler()
-        self.retry_handler = RetryHandler(RetryConfig(max_attempts=2, initial_delay=0.5, max_delay=5.0))
+        self.retry_handler: RetryHandler[Any, Any] = RetryHandler(
+            RetryConfig(max_attempts=2, initial_delay=0.5, max_delay=5.0)
+        )
         self.history = ChatHistory()
         self.conversations: Dict[str, ConversationContext] = {}
         self.agents: Dict[str, Dict[str, Agent]] = {}  # conv_id -> {agent_id -> agent}
 
     async def _handle_conversation(self, operation_name: str, **context_details) -> ErrorContext:
-        """Create error context for conversation operations"""
+        """Create error context for conversation operations."""
         return ErrorContext(
             component="conversation",
             operation=operation_name,
@@ -43,7 +52,7 @@ class ConversationManager:
         cause: Exception = None,
         recovery_hint: Optional[str] = None,
     ) -> ConversationError:
-        """Create a standardized conversation error"""
+        """Create a standardized conversation error."""
         if isinstance(cause, (ValueError, AgentError)):
             message = str(cause)
         return ConversationError(
@@ -54,17 +63,17 @@ class ConversationManager:
         )
 
     async def add_message(self, role: str, content: str) -> None:
-        """Add a message to conversation with error handling"""
+        """Add a message to conversation with error handling."""
         context = None
         try:
             context = await self._handle_conversation("add_message", role=role, content_length=len(content))
 
             if role == "user":
-                self.history.messages.append(Message(content=content, role=role))
+                self.history.add_user_message(content)
             elif role == "assistant":
-                self.history.messages.append(Message(content=content, role=role))
+                self.history.add_assistant_message(content)
             elif role == "system":
-                self.history.messages.append(Message(content=content, role=role))
+                self.history.add_system_message(content)
 
             # Apply memory window if configured
             if self.config.get("memory_window"):
@@ -76,7 +85,7 @@ class ConversationManager:
             raise self._create_conversation_error(message="Failed to add message", context=context, cause=e) from e
 
     async def process_message(self, message: str) -> str:
-        """Process a message in conversation with error handling"""
+        """Process a message in conversation with error handling."""
         context = None
         try:
             context = await self._handle_conversation("process_message", message_length=len(message))
@@ -84,8 +93,18 @@ class ConversationManager:
             # Add user message
             await self.add_message("user", message)
 
-            # Get agent response
-            response = await self.agent.process_message(self.history)
+            # Create a Message object and ConversationContext for the agent
+            user_message = Message(content=message, role="user")
+            conversation_context = ConversationContext("default")
+            conversation_context.history = self.history
+
+            # Get agent response (process_message returns an AsyncGenerator)
+            response_parts = []
+            async for part in self.agent.process_message(user_message, conversation_context):
+                response_parts.append(part)
+
+            # Combine all response parts
+            response = "".join(response_parts)
 
             # Add agent response
             await self.add_message("assistant", response)
@@ -105,7 +124,7 @@ class ConversationManager:
             ) from e
 
     async def clear_history(self) -> None:
-        """Clear conversation history with error handling"""
+        """Clear conversation history with error handling."""
         context = None
         try:
             context = await self._handle_conversation("clear_history")
@@ -117,7 +136,7 @@ class ConversationManager:
             ) from e
 
     async def create_conversation(self, config: ConversationConfig, agents: List[Agent]) -> ConversationContext:
-        """Create a new conversation with the specified agents"""
+        """Create a new conversation with the specified agents."""
         context = None
         try:
             context = await self._handle_conversation(
@@ -153,7 +172,7 @@ class ConversationManager:
             ) from e
 
     async def _process_agent_response(self, response: Any) -> AsyncIterator[str]:
-        """Process an agent's response and yield chunks"""
+        """Process an agent's response and yield chunks."""
         try:
             if isinstance(response, (AsyncGenerator, AsyncIterator)):
                 async for chunk in response:
@@ -172,7 +191,7 @@ class ConversationManager:
             raise
 
     async def process_message_in_conversation(self, conversation_id: str, message: Message) -> AsyncIterator[str]:
-        """Process a message in a conversation"""
+        """Process a message in a conversation."""
         context = None
         try:
             context = await self._handle_conversation("process_message_in_conversation", conversation_id=conversation_id)
@@ -209,7 +228,11 @@ class ConversationManager:
                                 yield chunk
                         else:
                             # For non-generator responses, we need to await them
-                            result = await response
+                            # Collect all parts from the response
+                            response_parts = []
+                            async for part in response:
+                                response_parts.append(part)
+                            result = "".join(response_parts)
                             yield result
                     except Exception as e:
                         if isinstance(e, AgentError):
@@ -238,7 +261,11 @@ class ConversationManager:
                                     yield chunk
                             else:
                                 # For non-generator responses, we need to await them
-                                result = await response
+                                # Collect all parts from the response
+                                response_parts = []
+                                async for part in response:
+                                    response_parts.append(part)
+                                result = "".join(response_parts)
                                 yield result
                         except Exception as e:
                             if isinstance(e, AgentError):
@@ -263,7 +290,11 @@ class ConversationManager:
                                     yield chunk
                             else:
                                 # For non-generator responses, we need to await them
-                                result = await response
+                                # Collect all parts from the response
+                                response_parts = []
+                                async for part in response:
+                                    response_parts.append(part)
+                                result = "".join(response_parts)
                                 yield result
                         except Exception as e:
                             if isinstance(e, AgentError):
@@ -285,7 +316,7 @@ class ConversationManager:
             ) from e
 
     def get_conversation(self, conversation_id: str) -> ConversationContext:
-        """Get a conversation context by ID"""
+        """Get a conversation context by ID."""
         context = self.conversations.get(conversation_id)
         if not context:
             raise ValueError(f"Conversation {conversation_id} not found")
