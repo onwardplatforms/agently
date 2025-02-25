@@ -1,0 +1,7 @@
+click
+semantic-kernel
+python-dotenv
+aiohttp
+jsonschema
+pyyaml
+requests
