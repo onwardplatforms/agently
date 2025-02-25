@@ -51,9 +51,7 @@ class OpenAIProvider(ModelProvider):
         if not api_key:
             raise ModelError(
                 message="OpenAI API key not found in environment",
-                context=ErrorContext(
-                    component="openai_provider", operation="initialize"
-                ),
+                context=ErrorContext(component="openai_provider", operation="initialize"),
                 recovery_hint="Set OPENAI_API_KEY environment variable",
             )
         self.client = OpenAIChatCompletion(
@@ -62,9 +60,7 @@ class OpenAIProvider(ModelProvider):
         )
         self.service_id = "openai"
 
-    async def chat(
-        self, history: ChatHistory, kernel: Optional[Kernel] = None, **kwargs
-    ) -> AsyncIterator[str]:
+    async def chat(self, history: ChatHistory, kernel: Optional[Kernel] = None, **kwargs) -> AsyncIterator[str]:
         """Process a chat message using OpenAI's streaming API.
 
         Args:
@@ -100,9 +96,7 @@ class OpenAIProvider(ModelProvider):
                 from ..plugins import PluginManager
 
                 plugin_manager = PluginManager()
-                plugin_manager.plugins = {
-                    name: (None, plugin) for name, plugin in kernel.plugins.items()
-                }
+                plugin_manager.plugins = {name: (None, plugin) for name, plugin in kernel.plugins.items()}
                 functions = plugin_manager.get_openai_functions()
                 settings.tools = functions.get("functions", [])
                 settings.tool_choice = functions.get("function_call", "auto")
@@ -125,9 +119,7 @@ class OpenAIProvider(ModelProvider):
                 )
 
         except Exception as e:
-            error = self._create_model_error(
-                message=f"Unexpected error: {str(e)}", context=context, cause=e
-            )
+            error = self._create_model_error(message=f"Unexpected error: {str(e)}", context=context, cause=e)
             yield f"Error: {str(error)} - {error.recovery_hint}"
 
     async def get_embeddings(self, text: str) -> list[float]:
@@ -143,15 +135,11 @@ class OpenAIProvider(ModelProvider):
             ModelError: For API errors or unexpected issues
         """
         try:
-            context = await self._handle_api_call(
-                "embeddings", model="text-embedding-ada-002", text=text
-            )
+            context = await self._handle_api_call("embeddings", model="text-embedding-ada-002", text=text)
 
             async def _make_request():
                 try:
-                    response = await self.client.embeddings.create(
-                        model="text-embedding-ada-002", input=text
-                    )
+                    response = await self.client.embeddings.create(model="text-embedding-ada-002", input=text)
                     return response.data[0].embedding
                 except Exception as e:
                     raise ModelError(

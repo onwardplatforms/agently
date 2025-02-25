@@ -3,8 +3,8 @@
 import inspect
 import re
 from abc import ABC
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple, Type, get_type_hints
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple, Type
 
 
 @dataclass
@@ -39,8 +39,7 @@ class VariableValidation:
             if not isinstance(value, str):
                 return (
                     False,
-                    self.error_message
-                    or "Value must be a string for pattern validation",
+                    self.error_message or "Value must be a string for pattern validation",
                 )
             if not re.match(self.pattern, value):
                 return (
@@ -200,8 +199,4 @@ class Plugin(ABC):
         Returns:
             Dictionary of function name to function object
         """
-        return {
-            name: func
-            for name, func in inspect.getmembers(cls)
-            if hasattr(func, "_is_kernel_function")
-        }
+        return {name: func for name, func in inspect.getmembers(cls) if hasattr(func, "_is_kernel_function")}

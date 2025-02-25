@@ -30,7 +30,6 @@ class PluginSource(ABC):
             ImportError: If the plugin cannot be imported
             ValueError: If the plugin is invalid
         """
-        pass
 
 
 @dataclass
@@ -67,16 +66,10 @@ class LocalPluginSource(PluginSource):
         elif path.is_dir() and (path / "__init__.py").exists():
             module_path = path / "__init__.py"
             module_name = path.name
-            logger.info(
-                f"Loading plugin from directory with __init__.py: {module_path}"
-            )
+            logger.info(f"Loading plugin from directory with __init__.py: {module_path}")
         else:
-            logger.error(
-                f"Plugin path must be a .py file or directory with __init__.py: {path}"
-            )
-            raise ImportError(
-                f"Plugin path must be a .py file or directory with __init__.py: {path}"
-            )
+            logger.error(f"Plugin path must be a .py file or directory with __init__.py: {path}")
+            raise ImportError(f"Plugin path must be a .py file or directory with __init__.py: {path}")
 
         # Import the module
         logger.debug(f"Creating module spec from file: {module_path}")
@@ -140,9 +133,7 @@ class GitHubPluginSource(PluginSource):
             ImportError: If the plugin cannot be imported
             ValueError: If the plugin is invalid
         """
-        logger.info(
-            f"Loading plugin from GitHub: {self.repo_url} at {self.version_tag}"
-        )
+        logger.info(f"Loading plugin from GitHub: {self.repo_url} at {self.version_tag}")
 
         # Create cache directory if it doesn't exist
         cache_dir = Path(self.cache_dir)
@@ -159,9 +150,7 @@ class GitHubPluginSource(PluginSource):
             logger.info(f"Repository not cached, cloning from GitHub")
             # Clone the repository
             try:
-                logger.debug(
-                    f"Running git clone for {self.repo_url} at {self.version_tag}"
-                )
+                logger.debug(f"Running git clone for {self.repo_url} at {self.version_tag}")
                 subprocess.run(
                     [
                         "git",
@@ -180,10 +169,7 @@ class GitHubPluginSource(PluginSource):
             except subprocess.CalledProcessError as e:
                 error_msg = e.stderr.decode()
                 logger.error(f"Failed to clone repository: {error_msg}", exc_info=e)
-                raise ImportError(
-                    f"Failed to clone repository {self.repo_url} at {self.version_tag}: "
-                    f"{error_msg}"
-                )
+                raise ImportError(f"Failed to clone repository {self.repo_url} at {self.version_tag}: " f"{error_msg}")
         else:
             logger.info(f"Using cached repository at {cache_path}")
 

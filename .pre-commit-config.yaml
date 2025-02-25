@@ -1,25 +1,31 @@
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v4.4.0
     hooks:
     -   id: trailing-whitespace
+        exclude: ^(venv|docs|\.grounding)/
     -   id: end-of-file-fixer
+        exclude: ^(venv|docs|\.grounding)/
     -   id: check-yaml
+        exclude: ^(venv|docs|\.grounding)/
     -   id: check-added-large-files
+        exclude: ^(venv|docs|\.grounding)/
 
 -   repo: https://github.com/psf/black
-    rev: 24.3.0
+    rev: 23.3.0
     hooks:
     -   id: black
+        exclude: ^(venv|docs|\.grounding)/
 
 # Uncomment these if you want to enable additional checks
 # -   repo: https://github.com/pycqa/isort
-#     rev: 5.13.2
+#     rev: 5.12.0
 #     hooks:
 #     -   id: isort
+#         exclude: ^(venv|docs|\.grounding)/
 
 # -   repo: https://github.com/pycqa/flake8
-#     rev: 7.0.0
+#     rev: 6.0.0
 #     hooks:
 #     -   id: flake8
-#         additional_dependencies: [flake8-docstrings]
+#         exclude: ^(venv|docs|\.grounding)/

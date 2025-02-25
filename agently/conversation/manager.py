@@ -23,16 +23,12 @@ class ConversationManager:
         self.agent = agent
         self.config = config or {}
         self.error_handler = get_error_handler()
-        self.retry_handler = RetryHandler(
-            RetryConfig(max_attempts=2, initial_delay=0.5, max_delay=5.0)
-        )
+        self.retry_handler = RetryHandler(RetryConfig(max_attempts=2, initial_delay=0.5, max_delay=5.0))
         self.history = ChatHistory()
         self.conversations: Dict[str, ConversationContext] = {}
         self.agents: Dict[str, Dict[str, Agent]] = {}  # conv_id -> {agent_id -> agent}
 
-    async def _handle_conversation(
-        self, operation_name: str, **context_details
-    ) -> ErrorContext:
+    async def _handle_conversation(self, operation_name: str, **context_details) -> ErrorContext:
         """Create error context for conversation operations"""
         return ErrorContext(
             component="conversation",
@@ -61,9 +57,7 @@ class ConversationManager:
         """Add a message to conversation with error handling"""
         context = None
         try:
-            context = await self._handle_conversation(
-                "add_message", role=role, content_length=len(content)
-            )
+            context = await self._handle_conversation("add_message", role=role, content_length=len(content))
 
             if role == "user":
                 self.history.messages.append(Message(content=content, role=role))
@@ -79,17 +73,13 @@ class ConversationManager:
                     self.history.messages = self.history.messages[-window:]
 
         except Exception as e:
-            raise self._create_conversation_error(
-                message="Failed to add message", context=context, cause=e
-            ) from e
+            raise self._create_conversation_error(message="Failed to add message", context=context, cause=e) from e
 
     async def process_message(self, message: str) -> str:
         """Process a message in conversation with error handling"""
         context = None
         try:
-            context = await self._handle_conversation(
-                "process_message", message_length=len(message)
-            )
+            context = await self._handle_conversation("process_message", message_length=len(message))
 
             # Add user message
             await self.add_message("user", message)
@@ -126,9 +116,7 @@ class ConversationManager:
                 message="Failed to clear conversation history", context=context, cause=e
             ) from e
 
-    async def create_conversation(
-        self, config: ConversationConfig, agents: List[Agent]
-    ) -> ConversationContext:
+    async def create_conversation(self, config: ConversationConfig, agents: List[Agent]) -> ConversationContext:
         """Create a new conversation with the specified agents"""
         context = None
         try:
@@ -183,15 +171,11 @@ class ConversationManager:
                 raise e
             raise
 
-    async def process_message_in_conversation(
-        self, conversation_id: str, message: Message
-    ) -> AsyncIterator[str]:
+    async def process_message_in_conversation(self, conversation_id: str, message: Message) -> AsyncIterator[str]:
         """Process a message in a conversation"""
         context = None
         try:
-            context = await self._handle_conversation(
-                "process_message_in_conversation", conversation_id=conversation_id
-            )
+            context = await self._handle_conversation("process_message_in_conversation", conversation_id=conversation_id)
 
             # Get conversation context
             conv_context = self.conversations.get(conversation_id)
@@ -249,9 +233,7 @@ class ConversationManager:
                         agent = agents[agent_order[idx]]
                         try:
                             response = agent.process_message(message, conv_context)
-                            if hasattr(
-                                response, "__aiter__"
-                            ):  # Handle async generators
+                            if hasattr(response, "__aiter__"):  # Handle async generators
                                 async for chunk in response:
                                     yield chunk
                             else:
@@ -269,18 +251,14 @@ class ConversationManager:
                             ) from e
 
                     # Update agent index for next turn
-                    conv_context.metadata["current_agent_idx"] = (
-                        current_idx + len(agent_order)
-                    ) % len(agent_order)
+                    conv_context.metadata["current_agent_idx"] = (current_idx + len(agent_order)) % len(agent_order)
                 else:
                     # Process with all agents in sequence
                     for agent_id in agent_order:
                         agent = agents[agent_id]
                         try:
                             response = agent.process_message(message, conv_context)
-                            if hasattr(
-                                response, "__aiter__"
-                            ):  # Handle async generators
+                            if hasattr(response, "__aiter__"):  # Handle async generators
                                 async for chunk in response:
                                     yield chunk
                             else:

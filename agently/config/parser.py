@@ -5,7 +5,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Union
 from uuid import uuid4
 
 import jsonschema
@@ -13,7 +13,7 @@ import yaml
 from dotenv import load_dotenv
 
 from agently.plugins.sources import GitHubPluginSource, LocalPluginSource
-from agently.utils import LogLevel
+from agently.utils.logging import LogLevel
 
 from .types import AgentConfig, ModelConfig, PluginConfig
 
@@ -94,11 +94,7 @@ def resolve_environment_variables(config: Dict[str, Any]) -> Dict[str, Any]:
                     env_section[key] = resolve_env_vars_in_string(value)
 
             # Update other keys normally
-            result = {
-                k: resolve_environment_variables(v)
-                for k, v in config.items()
-                if k != "env"
-            }
+            result = {k: resolve_environment_variables(v) for k, v in config.items() if k != "env"}
             result["env"] = env_section
             return result
         else:
@@ -175,9 +171,7 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
             plugin_path = (config_path.parent / plugin_path).resolve()
 
         source = LocalPluginSource(Path(plugin_path))
-        plugin_configs.append(
-            PluginConfig(source=source, variables=local_plugin.get("variables", {}))
-        )
+        plugin_configs.append(PluginConfig(source=source, variables=local_plugin.get("variables", {})))
 
     # Process GitHub plugins
     for github_plugin in plugins_yaml.get("github", []):
@@ -186,9 +180,7 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
             version_tag=github_plugin["version"],
             plugin_path=github_plugin["plugin_path"],
         )
-        plugin_configs.append(
-            PluginConfig(source=source, variables=github_plugin.get("variables", {}))
-        )
+        plugin_configs.append(PluginConfig(source=source, variables=github_plugin.get("variables", {})))
 
     # Set log level
     log_level = LogLevel.NONE  # Default

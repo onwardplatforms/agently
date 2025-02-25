@@ -11,3 +11,4 @@ mypy
 pre-commit
 pydantic
 types-requests
+autoflake
