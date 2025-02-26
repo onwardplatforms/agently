@@ -69,14 +69,21 @@ class Agent:
         )
 
     async def initialize(self) -> None:
-        """Initialize the agent's resources."""
+        """Initialize the agent with the configured model provider and plugins."""
         try:
-            context = await self._handle_agent_operation("initialize", provider_type=self.config.model.provider)
+            context = await self._handle_agent_operation("initialize")
             logger.debug("Initializing agent with context: %s", context)
 
-            # Initialize model provider
-            provider_type = self.config.model.provider
-            logger.info("Initializing model provider: %s", provider_type)
+            # Create a new kernel
+            from semantic_kernel import Kernel
+
+            self.kernel = Kernel()
+            logger.debug("Created new kernel")
+
+            # Initialize the model provider
+            provider_type = self.config.model.provider.lower()
+            logger.debug("Initializing model provider: %s", provider_type)
+
             if provider_type == "openai":
                 from ..models.openai import OpenAIProvider
 
@@ -92,6 +99,9 @@ class Agent:
                 # Register the provider with the kernel
                 if self.provider.client:
                     self.kernel.add_service(self.provider.client)
+                # Register the kernel with the provider for function calling
+                if hasattr(self.provider, "register_kernel"):
+                    self.provider.register_kernel(self.kernel)
                 logger.info(f"Ollama provider initialized with model: {self.config.model.model}")
             else:
                 raise ValueError(f"Unsupported provider type: {provider_type}")
@@ -99,15 +109,15 @@ class Agent:
 
             # Initialize plugins
             await self._init_plugins()
-            logger.info("Agent initialization complete")
+            logger.debug("Plugins initialized")
 
         except Exception as e:
-            logger.error("Failed to initialize agent", exc_info=e)
+            logger.error("Error initializing agent", extra={"error": str(e)}, exc_info=e)
             raise self._create_agent_error(
                 message="Failed to initialize agent",
                 context=context,
                 cause=e,
-                recovery_hint="Check configuration and provider settings",
+                recovery_hint="Check configuration and model availability",
             ) from e
 
     async def _init_plugins(self) -> None:
@@ -331,24 +341,27 @@ class Agent:
                                     grouped_chunks[key] = []
                                 grouped_chunks[key].append(chunk)
 
-                            # Log tool calls for debugging
+                            # Process tool calls and extract results
                             for attempt, chunks in grouped_chunks.items():
                                 logger.debug(f"Tool call attempt {attempt} with {len(chunks)} chunks")
-                                # Log the content of the first chunk for diagnostics
+                                # Extract and yield function results
                                 if chunks:
-                                    first_chunk = chunks[0]
-                                    logger.debug(f"First chunk in attempt {attempt}: {first_chunk}")
-                                    if hasattr(first_chunk, "content"):
-                                        logger.debug(f"Content: {first_chunk.content}")
-                                    if hasattr(first_chunk, "items"):
-                                        logger.debug(f"Items: {first_chunk.items}")
-                                # We don't need to do anything with these right now
-                                # In the future, we could process these tool calls
+                                    for chunk in chunks:
+                                        # Check if this chunk has items with function results
+                                        if hasattr(chunk, "items"):
+                                            for item in chunk.items:
+                                                if hasattr(item, "content_type") and item.content_type == "function_result":
+                                                    if hasattr(item, "result") and item.result:
+                                                        # This is a function result, yield the actual result
+                                                        logger.debug(f"Found function result: {item.result}")
+                                                        # Replace the complete_assistant_response with the function result
+                                                        complete_assistant_response = str(item.result)
+                                                        # We've already yielded chunks, so we don't need to yield again
                         except Exception as e:
                             logger.error(f"Error processing tool chunks: {e}", exc_info=e)
 
                     # After streaming is complete, add the assistant's complete response to history
-                    if streamed_assistant_chunks:
+                    if streamed_assistant_chunks or complete_assistant_response:
                         logger.debug(f"Adding assistant response to history: {complete_assistant_response[:50]}...")
                         logger.debug(f"Chat history before adding response has {len(history.messages)} messages")
                         await context.add_message(Message(content=complete_assistant_response, role="assistant"))
