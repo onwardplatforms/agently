@@ -81,9 +81,7 @@ async def test_conversation_manager_initialization(test_agent_config, mock_opena
 
 
 @pytest.mark.asyncio
-async def test_conversation_manager_create_conversation(
-    test_agent_config, mock_openai_key
-):
+async def test_conversation_manager_create_conversation(test_agent_config, mock_openai_key):
     """Test creating a new conversation."""
     agent = Agent(test_agent_config)
     await agent.initialize()
@@ -150,9 +148,7 @@ async def test_conversation_manager_error_context():
 
 
 @pytest.mark.asyncio
-async def test_conversation_manager_message_processing(
-    test_agent_config, mock_openai_key
-):
+async def test_conversation_manager_message_processing(test_agent_config, mock_openai_key):
     """Test message processing with error handling."""
     agent = Agent(test_agent_config)
     await agent.initialize()
@@ -169,18 +165,14 @@ async def test_conversation_manager_message_processing(
 
     # Test error in message processing
     error_msg = "Test error"
-    with patch.object(
-        manager, "_handle_conversation", side_effect=Exception(error_msg)
-    ):
+    with patch.object(manager, "_handle_conversation", side_effect=Exception(error_msg)):
         with pytest.raises(ConversationError) as exc_info:
             await manager.add_message("user", "Should fail")
         assert error_msg in str(exc_info.value.__cause__)
 
 
 @pytest.mark.asyncio
-async def test_conversation_manager_multi_agent_processing(
-    test_agent_config, mock_openai_key
-):
+async def test_conversation_manager_multi_agent_processing(test_agent_config, mock_openai_key):
     """Test conversation with multiple agents."""
     # Create two agents
     agent1 = Agent(test_agent_config)
@@ -210,9 +202,7 @@ async def test_conversation_manager_multi_agent_processing(
     # Process message
     message = Message(content="Hi", role="user")
     responses = []
-    async for response in manager.process_message_in_conversation(
-        "multi-agent-test", message
-    ):
+    async for response in manager.process_message_in_conversation("multi-agent-test", message):
         responses.append(response)
 
     # Should get responses from both agents
@@ -270,18 +260,14 @@ async def test_conversation_manager_clear_history(test_agent_config, mock_openai
     assert len(manager.history.messages) == 0
 
     # Test error handling in clear_history
-    with patch.object(
-        manager, "_handle_conversation", side_effect=Exception("Test error")
-    ):
+    with patch.object(manager, "_handle_conversation", side_effect=Exception("Test error")):
         with pytest.raises(ConversationError) as exc_info:
             await manager.clear_history()
         assert "Failed to clear conversation history" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
-async def test_conversation_manager_error_propagation(
-    test_agent_config, mock_openai_key
-):
+async def test_conversation_manager_error_propagation(test_agent_config, mock_openai_key):
     """Test error handling and propagation in conversation manager."""
     agent = Agent(test_agent_config)
     await agent.initialize()
@@ -295,6 +281,8 @@ async def test_conversation_manager_error_propagation(
     error_message = "Test agent error"
 
     async def mock_error(message, context):
+        if False:  # This will never run, but makes it an async generator
+            yield ""
         raise AgentError(error_message, None)
 
     agent.process_message = mock_error
@@ -344,9 +332,7 @@ async def test_conversation_manager_turn_taking(test_agent_config, mock_openai_k
     message = Message(content="Hi", role="user")
     all_responses = []
     for _ in range(2):  # Two rounds
-        async for response in manager.process_message_in_conversation(
-            "turn-test", message
-        ):
+        async for response in manager.process_message_in_conversation("turn-test", message):
             all_responses.append(response)
 
     # Should get responses from all agents in order

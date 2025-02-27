@@ -6,7 +6,7 @@ logging levels and output formats across the framework.
 
 import logging
 import sys
-from typing import Dict, Optional, List, Union
+from typing import Dict, List, Optional, Union
 
 
 # Define log levels for easier reference

@@ -7,9 +7,8 @@ This module provides integration with OpenAI's API, including:
 """
 
 import os
-from typing import AsyncIterator, Optional, Any
+from typing import Any, AsyncIterator
 
-from semantic_kernel import Kernel
 from semantic_kernel.connectors.ai.function_choice_behavior import (
     FunctionChoiceBehavior,
 )
@@ -94,9 +93,10 @@ class OpenAIProvider(ModelProvider):
 
             # Add function definitions if kernel is provided
             if kernel:
+                from typing import cast
+
                 from ..plugins import PluginManager
                 from ..plugins.base import Plugin
-                from typing import cast
 
                 plugin_manager = PluginManager()
                 plugin_manager.plugins = {

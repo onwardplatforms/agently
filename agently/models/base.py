@@ -5,7 +5,7 @@ interactions with various AI models and provides error handling capabilities.
 """
 
 from abc import ABC, abstractmethod
-from typing import AsyncIterator, Any
+from typing import Any, AsyncIterator
 
 from semantic_kernel.contents import ChatHistory
 

@@ -5,14 +5,14 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Union
 from uuid import uuid4
 
 import jsonschema
 import yaml
 from dotenv import load_dotenv
 
-from agently.config.types import AgentConfig, CapabilityConfig, ModelConfig, PluginConfig, PluginSourceType
+from agently.config.types import AgentConfig, ModelConfig, PluginConfig, PluginSourceType
 from agently.plugins.sources import GitHubPluginSource, LocalPluginSource
 from agently.utils.logging import LogLevel
 

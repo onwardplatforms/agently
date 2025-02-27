@@ -5,6 +5,7 @@ from typing import Optional
 from semantic_kernel.functions import kernel_function
 
 from agently.plugins.base import Plugin, PluginVariable
+from agently.utils import format_action, format_subaction, format_result, format_function_call, format_function_result
 
 
 class HelloPlugin(Plugin):
@@ -16,7 +17,10 @@ class HelloPlugin(Plugin):
     Use this plugin when you need to:
     - Greet someone with a simple hello message
     - Greet generically using the configured default_name when no specific person is mentioned
-    - For generic greetings with no target name, use the greet function without arguments to use the default_name
+
+    IMPORTANT: When you call the greet function, return ONLY the exact greeting message produced
+    by the function without adding any additional commentary or explanations.
+    Do not call the function multiple times for the same request.
     """
 
     # Define a default_name variable that can be configured
@@ -26,9 +30,7 @@ class HelloPlugin(Plugin):
         default="World",
     )
 
-    @kernel_function(
-        description="Greet someone by name, or use the configured default_name if no name is provided"
-    )
+    @kernel_function(description="Greet someone by name, or use the configured default_name if no name is provided")
     def greet(self, name: Optional[str] = None) -> str:
         """Generate a friendly greeting message.
 
@@ -41,7 +43,18 @@ class HelloPlugin(Plugin):
         Returns:
             A personalized greeting message
         """
+        # Show the action being performed
+        print(format_action(f"Plugin: Creating greeting"))
+
+        # Generate the greeting
         if name:
-            return f"Hello, {name}!"
+            print(format_subaction(f"Target: {name}"))
+            result = f"Hello, {name}!"
         else:
-            return f"Hello, {self.default_name}!"
+            print(format_subaction(f"Using default: {self.default_name}"))
+            result = f"Hello, {self.default_name}!"
+
+        # Show the successful result
+        print(format_result(f'Function returned: "{result}"'))
+
+        return result

@@ -6,13 +6,13 @@ and conversations.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 from agently.utils.logging import LogLevel
 
 # Forward references for type hints
 if TYPE_CHECKING:
-    from agently.plugins.sources import LocalPluginSource, GitHubPluginSource
+    from agently.plugins.sources import GitHubPluginSource, LocalPluginSource
 
     PluginSourceType = Union["LocalPluginSource", "GitHubPluginSource"]
 else:

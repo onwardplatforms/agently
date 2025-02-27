@@ -5,7 +5,7 @@ including initialization, plugin management, and message processing.
 """
 
 import logging
-from typing import AsyncGenerator, Optional, Any, Dict, List
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from semantic_kernel import Kernel
 from semantic_kernel.contents.streaming_chat_message_content import (

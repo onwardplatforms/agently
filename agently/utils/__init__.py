@@ -1,1 +1,18 @@
-"""Utility functions for the agent runtime."""
+"""Utility modules for Agently."""
+
+from .cli_format import (  # Basic color functions; Function call formatting; Plugin action formatting
+    blue,
+    bold,
+    cyan,
+    format_action,
+    format_file_header,
+    format_function_call,
+    format_function_result,
+    format_result,
+    format_subaction,
+    gray,
+    green,
+    magenta,
+    red,
+    yellow,
+)
