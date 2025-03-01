@@ -176,8 +176,10 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
     for github_plugin in plugins_yaml.get("github", []):
         github_source: PluginSourceType = GitHubPluginSource(
             repo_url=github_plugin["repo"],
-            version_tag=github_plugin["version"],
-            plugin_path=github_plugin["plugin_path"],
+            version=github_plugin.get("version", "main"),  # Default to main if not specified
+            plugin_path=github_plugin.get("plugin_path", ""),
+            namespace=github_plugin.get("namespace", ""),
+            name=github_plugin.get("name", ""),
         )
         plugin_configs.append(PluginConfig(source=github_source, variables=github_plugin.get("variables", {})))
 

@@ -38,6 +38,7 @@ env/
 
 # Agently specific
 .grounding/
+.agently/
 
 # Coverage
 .coverage

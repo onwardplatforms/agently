@@ -1,3 +1,4 @@
+agently_sdk
 click>=8.1.7
 semantic-kernel>=0.3.14.dev0
 python-dotenv>=1.0.0
