@@ -3,8 +3,8 @@
 import inspect
 import re
 from abc import ABC
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple, Type, get_type_hints
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple, Type
 
 
 @dataclass
@@ -39,8 +39,7 @@ class VariableValidation:
             if not isinstance(value, str):
                 return (
                     False,
-                    self.error_message
-                    or "Value must be a string for pattern validation",
+                    self.error_message or "Value must be a string for pattern validation",
                 )
             if not re.match(self.pattern, value):
                 return (
@@ -106,7 +105,7 @@ class PluginVariable:
 
                 if origin == list:
                     if not isinstance(value, list):
-                        return False, f"Value must be a list"
+                        return False, "Value must be a list"
                     # Validate each item in the list
                     for item in value:
                         if not isinstance(item, args[0]):
@@ -114,7 +113,7 @@ class PluginVariable:
 
                 elif origin == dict:
                     if not isinstance(value, dict):
-                        return False, f"Value must be a dictionary"
+                        return False, "Value must be a dictionary"
                     # Validate dict key and value types
                     for k, v in value.items():
                         if not isinstance(k, args[0]):
@@ -135,11 +134,29 @@ class PluginVariable:
 
     # Add descriptor methods to make it work as a proper descriptor
     def __get__(self, obj, objtype=None):
+        """Get the value of this variable from the plugin instance.
+
+        Args:
+            obj: The plugin instance
+            objtype: The plugin class
+
+        Returns:
+            The value of this variable
+        """
         if obj is None:
             return self
         return obj._values.get(self.name, self.default)
 
     def __set__(self, obj, value):
+        """Set the value of this variable on the plugin instance.
+
+        Args:
+            obj: The plugin instance
+            value: The value to set
+
+        Raises:
+            ValueError: If the value is invalid
+        """
         is_valid, error = self.validate(value)
         if not is_valid:
             raise ValueError(f"Invalid value for {self.name}: {error}")
@@ -200,8 +217,4 @@ class Plugin(ABC):
         Returns:
             Dictionary of function name to function object
         """
-        return {
-            name: func
-            for name, func in inspect.getmembers(cls)
-            if hasattr(func, "_is_kernel_function")
-        }
+        return {name: func for name, func in inspect.getmembers(cls) if hasattr(func, "_is_kernel_function")}

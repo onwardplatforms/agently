@@ -1,6 +1,4 @@
-"""
-Error handling system for the agent runtime.
-"""
+"""Error handling system for the agent runtime."""
 
 from .handler import ErrorHandler, ErrorHandlerConfig, RetryConfig, RetryHandler
 from .types import (

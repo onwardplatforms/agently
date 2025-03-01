@@ -1,6 +1,12 @@
+"""Plugin management for the Agently framework.
+
+This module provides the PluginManager class for loading, executing, and managing
+plugins that extend the functionality of agents.
+"""
+
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, Optional, Type
 
 from agently.core import get_error_handler
 from agently.errors import ErrorContext, PluginError, RetryConfig, RetryHandler
@@ -22,16 +28,14 @@ class PluginManager:
         """
         self.config = config or {}
         self.error_handler = get_error_handler()
-        self.retry_handler = RetryHandler(
+        self.retry_handler: RetryHandler[Any, Any] = RetryHandler(
             RetryConfig(max_attempts=2, initial_delay=0.5, max_delay=5.0)
         )
         # Store both the plugin class and instance
         self.plugins: Dict[str, tuple[Type[Plugin], Plugin]] = {}
         logger.info("PluginManager initialized")
 
-    async def _handle_plugin_operation(
-        self, operation_name: str, **context_details
-    ) -> ErrorContext:
+    async def _handle_plugin_operation(self, operation_name: str, **context_details) -> ErrorContext:
         """Create error context for plugin operations."""
         return ErrorContext(
             component="plugin_manager",
@@ -50,14 +54,11 @@ class PluginManager:
         return PluginError(
             message=message,
             context=context,
-            recovery_hint=recovery_hint
-            or "Check plugin configuration and dependencies",
+            recovery_hint=recovery_hint or "Check plugin configuration and dependencies",
             cause=cause,
         )
 
-    async def load_plugin(
-        self, source: PluginSource, variables: Optional[Dict[str, Any]] = None
-    ) -> Plugin:
+    async def load_plugin(self, source: PluginSource, variables: Optional[Dict[str, Any]] = None) -> Plugin:
         """Load a plugin with error handling.
 
         Args:
@@ -71,9 +72,7 @@ class PluginManager:
             PluginError: If plugin loading fails
         """
         try:
-            context = await self._handle_plugin_operation(
-                "load_plugin", source=str(source)
-            )
+            context = await self._handle_plugin_operation("load_plugin", source=str(source))
             logger.info(f"Loading plugin from source: {source}")
 
             # Load the plugin class
@@ -82,11 +81,16 @@ class PluginManager:
             logger.info(f"Loaded plugin class: {plugin_class.__name__}")
 
             # Log plugin class details
-            logger.info(
-                f"Plugin class details: name={plugin_class.name}, description={plugin_class.description}"
-            )
+            logger.info(f"Plugin class details: name={plugin_class.name}, description={plugin_class.description}")
             logger.debug(
-                f"Plugin variables: {[name for name, _ in plugin_class.__dict__.items() if hasattr(plugin_class, name) and isinstance(getattr(plugin_class, name), type) and name != 'name']}"
+                "Plugin variables: "
+                + str(
+                    [
+                        name
+                        for name, _ in plugin_class.__dict__.items()
+                        if hasattr(plugin_class, name) and isinstance(getattr(plugin_class, name), type) and name != "name"
+                    ]
+                )
             )
 
             # Create plugin instance with variables
@@ -113,14 +117,10 @@ class PluginManager:
                 recovery_hint="Verify plugin source exists and variables are correct",
             ) from e
 
-    async def execute_plugin(
-        self, plugin_name: str, method_name: str, *args, **kwargs
-    ) -> Any:
+    async def execute_plugin(self, plugin_name: str, method_name: str, *args, **kwargs) -> Any:
         """Execute a plugin method with error handling and retries."""
         try:
-            context = await self._handle_plugin_operation(
-                "execute_plugin", plugin_name=plugin_name, method_name=method_name
-            )
+            context = await self._handle_plugin_operation("execute_plugin", plugin_name=plugin_name, method_name=method_name)
             logger.info(f"Executing plugin method: {plugin_name}.{method_name}")
 
             if plugin_name not in self.plugins:
@@ -132,9 +132,7 @@ class PluginManager:
 
             if not hasattr(plugin_instance, method_name):
                 logger.error(f"Plugin {plugin_name} has no method {method_name}")
-                raise AttributeError(
-                    f"Plugin {plugin_name} has no method {method_name}"
-                )
+                raise AttributeError(f"Plugin {plugin_name} has no method {method_name}")
 
             method = getattr(plugin_instance, method_name)
             logger.debug(f"Retrieved method: {method}")
@@ -146,31 +144,23 @@ class PluginManager:
             logger.debug(f"Confirmed {method_name} is a kernel function")
 
             async def _execute():
-                logger.debug(
-                    f"Executing {plugin_name}.{method_name} with args={args}, kwargs={kwargs}"
-                )
+                logger.debug(f"Executing {plugin_name}.{method_name} with args={args}, kwargs={kwargs}")
                 # Handle both sync and async methods
                 if hasattr(method, "__await__"):
                     result = await method(*args, **kwargs)
-                    logger.debug(
-                        f"Async method execution completed with result: {result}"
-                    )
+                    logger.debug(f"Async method execution completed with result: {result}")
                     return result
                 result = method(*args, **kwargs)
                 logger.debug(f"Sync method execution completed with result: {result}")
                 return result
 
             logger.debug(f"Executing {plugin_name}.{method_name} with retry")
-            result = await self.retry_handler.execute_with_retry(_execute)
-            logger.info(
-                f"Execution of {plugin_name}.{method_name} completed successfully"
-            )
+            result = await self.retry_handler.retry(_execute, context)
+            logger.info(f"Execution of {plugin_name}.{method_name} completed successfully")
             return result
 
         except Exception as e:
-            logger.error(
-                f"Failed to execute plugin {plugin_name}.{method_name}: {e}", exc_info=e
-            )
+            logger.error(f"Failed to execute plugin {plugin_name}.{method_name}: {e}", exc_info=e)
             raise self._create_plugin_error(
                 message=f"Failed to execute plugin {plugin_name}.{method_name}",
                 context=context,
@@ -181,9 +171,7 @@ class PluginManager:
     async def unload_plugin(self, plugin_name: str) -> None:
         """Unload a plugin with error handling."""
         try:
-            context = await self._handle_plugin_operation(
-                "unload_plugin", plugin_name=plugin_name
-            )
+            context = await self._handle_plugin_operation("unload_plugin", plugin_name=plugin_name)
             logger.info(f"Unloading plugin: {plugin_name}")
 
             if plugin_name not in self.plugins:
@@ -203,9 +191,7 @@ class PluginManager:
                 logger.info(f"Cleanup completed for plugin {plugin_name}")
 
             del self.plugins[plugin_name]
-            logger.info(
-                f"Plugin {plugin_name} unloaded and removed from plugin manager"
-            )
+            logger.info(f"Plugin {plugin_name} unloaded and removed from plugin manager")
 
         except Exception as e:
             logger.error(f"Failed to unload plugin {plugin_name}: {e}", exc_info=e)
@@ -216,9 +202,7 @@ class PluginManager:
             ) from e
 
     # Convenience method for loading from file path
-    async def load_plugin_from_path(
-        self, path: str | Path, variables: Optional[Dict[str, Any]] = None
-    ) -> Plugin:
+    async def load_plugin_from_path(self, path: str | Path, variables: Optional[Dict[str, Any]] = None) -> Plugin:
         """Load a plugin from a file path.
 
         Args:
@@ -244,13 +228,11 @@ class PluginManager:
         for plugin_class, plugin_instance in self.plugins.values():
             # Get all kernel functions from the plugin
             kernel_functions = plugin_class.get_kernel_functions()
-            logger.debug(
-                f"Plugin {plugin_instance.name} has {len(kernel_functions)} kernel functions"
-            )
+            logger.debug(f"Plugin {plugin_instance.name} has {len(kernel_functions)} kernel functions")
 
             for func_name, func in kernel_functions.items():
                 # Convert each function to OpenAI format
-                function_def = {
+                function_def: Dict[str, Any] = {
                     "name": f"{plugin_instance.name}_{func_name}",
                     "description": func.__doc__ or "",
                     "parameters": {"type": "object", "properties": {}, "required": []},
@@ -271,15 +253,15 @@ class PluginManager:
 
                     # Mark as required if no default value
                     if param.default == inspect.Parameter.empty:
-                        function_def["parameters"]["required"].append(param_name)
+                        required_list = function_def["parameters"]["required"]
+                        required_list.append(param_name)
 
-                    function_def["parameters"]["properties"][param_name] = param_def
+                    properties_dict = function_def["parameters"]["properties"]
+                    properties_dict[param_name] = param_def
 
                 functions.append(function_def)
                 logger.debug(f"Added function definition for {function_def['name']}")
 
         result = {"functions": functions, "function_call": "auto"}
-        logger.info(
-            f"Created OpenAI functions definition with {len(functions)} functions"
-        )
+        logger.info(f"Created OpenAI functions definition with {len(functions)} functions")
         return result

@@ -4,14 +4,11 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Optional
 
 import click
 
-from agently.agents.agent import Agent
 from agently.config.parser import load_agent_config
-from agently.conversation.manager import ConversationManager
-from agently.utils import LogLevel, configure_logging
+from agently.utils.logging import LogLevel, configure_logging
 
 from .interactive import interactive_loop
 
@@ -21,18 +18,13 @@ logger = logging.getLogger(__name__)
 @click.group()
 def cli():
     """agently.run - Declarative AI agents without code."""
-    pass
 
 
 @cli.command()
-@click.option(
-    "--agent", "-a", default="agently.yaml", help="Path to agent configuration file"
-)
+@click.option("--agent", "-a", default="agently.yaml", help="Path to agent configuration file")
 @click.option(
     "--log-level",
-    type=click.Choice(
-        ["none", "debug", "info", "warning", "error", "critical"], case_sensitive=False
-    ),
+    type=click.Choice(["none", "debug", "info", "warning", "error", "critical"], case_sensitive=False),
     help="Override the log level",
 )
 def run(agent, log_level):
@@ -58,9 +50,7 @@ def run(agent, log_level):
         logger.info(f"Loaded agent configuration for: {agent_config.name}")
 
         # Check for required OpenAI API key if using OpenAI provider
-        if agent_config.model.provider == "openai" and not os.environ.get(
-            "OPENAI_API_KEY"
-        ):
+        if agent_config.model.provider == "openai" and not os.environ.get("OPENAI_API_KEY"):
             click.echo("Error: OPENAI_API_KEY environment variable not set")
             click.echo("Please set it with: export OPENAI_API_KEY=your_key_here")
             sys.exit(1)

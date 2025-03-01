@@ -1,6 +1,4 @@
-"""
-Error handling and recovery system for the agent runtime.
-"""
+"""Error handling and recovery system for the agent runtime."""
 
 import asyncio
 import logging
@@ -59,9 +57,7 @@ class ErrorHandler:
         self._error_counts: Dict[str, int] = {}
         self._last_errors: Dict[str, datetime] = {}
 
-    async def handle_error(
-        self, error: AgentRuntimeError, context_id: Optional[str] = None
-    ) -> None:
+    async def handle_error(self, error: AgentRuntimeError, context_id: Optional[str] = None) -> None:
         """Handle an error with appropriate logging and callbacks."""
         # Update error tracking
         if context_id:
@@ -108,14 +104,8 @@ class ErrorHandler:
         threshold = now - timedelta(minutes=30)
 
         # Remove old entries
-        self._error_counts = {
-            k: v
-            for k, v in self._error_counts.items()
-            if self._last_errors.get(k, now) > threshold
-        }
-        self._last_errors = {
-            k: v for k, v in self._last_errors.items() if v > threshold
-        }
+        self._error_counts = {k: v for k, v in self._error_counts.items() if self._last_errors.get(k, now) > threshold}
+        self._last_errors = {k: v for k, v in self._last_errors.items() if v > threshold}
 
     def _log_error(self, error: AgentRuntimeError) -> None:
         """Log error with appropriate level and context."""
@@ -164,8 +154,7 @@ class RetryHandler(Generic[T, R]):
                 if attempt + 1 < self.config.max_attempts:
                     delay = self._calculate_delay(attempt)
                     logger.warning(
-                        f"Retry attempt {attempt + 1} failed, "
-                        f"retrying in {delay:.2f}s",
+                        f"Retry attempt {attempt + 1} failed, " f"retrying in {delay:.2f}s",
                         extra={"context": context.__dict__},
                     )
                     await asyncio.sleep(delay)
@@ -179,9 +168,7 @@ class RetryHandler(Generic[T, R]):
             cause=last_error,
         )
 
-    async def retry(
-        self, operation: Callable[[], Awaitable[R]], context: ErrorContext
-    ) -> R:
+    async def retry(self, operation: Callable[[], Awaitable[R]], context: ErrorContext) -> R:
         """Retry an async operation with exponential backoff."""
         last_error = None
 
@@ -194,8 +181,7 @@ class RetryHandler(Generic[T, R]):
                 if attempt + 1 < self.config.max_attempts:
                     delay = self._calculate_delay(attempt)
                     logger.warning(
-                        f"Retry attempt {attempt + 1} failed, "
-                        f"retrying in {delay:.2f}s",
+                        f"Retry attempt {attempt + 1} failed, " f"retrying in {delay:.2f}s",
                         extra={"context": context.__dict__},
                     )
                     await asyncio.sleep(delay)

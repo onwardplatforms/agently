@@ -12,7 +12,7 @@ from click.testing import CliRunner
 from agently.cli.commands import cli, run
 from agently.config.types import AgentConfig, ModelConfig
 from agently.errors import AgentError
-from agently.utils import LogLevel
+from agently.utils.logging import LogLevel
 
 
 @pytest.fixture
@@ -73,7 +73,6 @@ def test_run_command_with_config(temp_agent_yaml):
         patch("agently.cli.commands.interactive_loop") as mock_loop,
         patch.dict(os.environ, {"OPENAI_API_KEY": "test-key-123"}),
     ):
-
         runner = CliRunner()
         result = runner.invoke(cli, ["run", "--agent", str(temp_agent_yaml)])
 
@@ -102,11 +101,8 @@ def test_run_command_with_log_level(temp_agent_yaml):
         patch("agently.cli.commands.configure_logging") as mock_logging,
         patch.dict(os.environ, {"OPENAI_API_KEY": "test-key-123"}),
     ):
-
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["run", "--agent", str(temp_agent_yaml), "--log-level", "debug"]
-        )
+        result = runner.invoke(cli, ["run", "--agent", str(temp_agent_yaml), "--log-level", "debug"])
 
         # Check that the command executed correctly
         assert result.exit_code == 0
@@ -133,11 +129,5 @@ def test_run_command_missing_openai_key(temp_agent_yaml):
                 mock_exit.assert_any_call(1)
 
                 # Check the error message was displayed
-                assert (
-                    "Error: OPENAI_API_KEY environment variable not set"
-                    in result.output
-                )
-                assert (
-                    "Please set it with: export OPENAI_API_KEY=your_key_here"
-                    in result.output
-                )
+                assert "Error: OPENAI_API_KEY environment variable not set" in result.output
+                assert "Please set it with: export OPENAI_API_KEY=your_key_here" in result.output

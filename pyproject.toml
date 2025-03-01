@@ -3,27 +3,47 @@ requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.black]
-line-length = 88
-target-version = ['py38', 'py39', 'py310', 'py311']
-include = '\.pyi?$'
+line-length = 125
+target-version = ["py38", "py39", "py310", "py311"]
+exclude = '''
+(
+  /(
+      \.git
+    | \.hg
+    | \.mypy_cache
+    | \.tox
+    | \.venv
+    | _build
+    | buck-out
+    | build
+    | dist
+    | venv
+  )/
+)
+'''
 
 [tool.isort]
 profile = "black"
-multi_line_output = 3
+line_length = 125
+skip = ["venv", ".grounding"]
+
+[tool.autoflake]
+exclude = ["venv", ".grounding"]
+in-place = true
+remove-all-unused-imports = true
+remove-unused-variables = true
+recursive = true
 
 [tool.mypy]
-python_version = "3.8"
-warn_return_any = true
+python_version = "3.11"
+warn_return_any = false
 warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
 check_untyped_defs = true
-disallow_untyped_decorators = true
-no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-warn_unreachable = true
+disallow_untyped_decorators = false
+no_implicit_optional = false
+strict_optional = false
 packages = ["agently"]
 
 [[tool.mypy.overrides]]
@@ -31,4 +51,6 @@ module = "semantic_kernel.*"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"

@@ -1,5 +1,11 @@
+"""Agent implementation for the Agently framework.
+
+This module provides the core Agent class that manages individual agent behavior,
+including initialization, plugin management, and message processing.
+"""
+
 import logging
-from typing import Any, AsyncGenerator, AsyncIterator, Dict, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from semantic_kernel import Kernel
 from semantic_kernel.contents.streaming_chat_message_content import (
@@ -13,13 +19,12 @@ from agently.conversation.context import ConversationContext, Message
 from agently.core import get_error_handler
 from agently.errors import AgentError, ErrorContext, RetryConfig, RetryHandler
 from agently.models.base import ModelProvider
-from agently.utils.logging import LogLevel, configure_logging
 
 logger = logging.getLogger(__name__)
 
 
 class Agent:
-    """Core agent class that manages individual agent behavior"""
+    """Core agent class that manages individual agent behavior."""
 
     def __init__(self, config: AgentConfig):
         self.config = config
@@ -35,15 +40,13 @@ class Agent:
         self.kernel = Kernel()
         self.provider: Optional[ModelProvider] = None
         self.error_handler = get_error_handler()
-        self.retry_handler = RetryHandler(
+        self.retry_handler: RetryHandler[Any, Any] = RetryHandler(
             RetryConfig(max_attempts=2, initial_delay=0.5, max_delay=5.0)
         )
         logger.info(f"Agent initialized with config: id={self.id}, name={self.name}")
 
-    async def _handle_agent_operation(
-        self, operation_name: str, **context_details
-    ) -> ErrorContext:
-        """Create error context for agent operations"""
+    async def _handle_agent_operation(self, operation_name: str, **context_details) -> ErrorContext:
+        """Create error context for agent operations."""
         return ErrorContext(
             component="agent",
             operation=operation_name,
@@ -57,7 +60,7 @@ class Agent:
         cause: Exception = None,
         recovery_hint: Optional[str] = None,
     ) -> AgentError:
-        """Create a standardized agent error"""
+        """Create a standardized agent error."""
         return AgentError(
             message=message,
             context=context,
@@ -66,53 +69,59 @@ class Agent:
         )
 
     async def initialize(self) -> None:
-        """Initialize the agent's resources"""
+        """Initialize the agent with the configured model provider and plugins."""
         try:
-            context = await self._handle_agent_operation(
-                "initialize", provider_type=self.config.model.provider
-            )
+            context = await self._handle_agent_operation("initialize")
             logger.debug("Initializing agent with context: %s", context)
 
-            # Initialize model provider
-            provider_type = self.config.model.provider
-            logger.info("Initializing model provider: %s", provider_type)
+            # Create a new kernel
+            from semantic_kernel import Kernel
+
+            self.kernel = Kernel()
+            logger.debug("Created new kernel")
+
+            # Initialize the model provider
+            provider_type = self.config.model.provider.lower()
+            logger.debug("Initializing model provider: %s", provider_type)
+
             if provider_type == "openai":
                 from ..models.openai import OpenAIProvider
 
                 self.provider = OpenAIProvider(self.config.model)
                 # Register the provider with the kernel
-                self.kernel.add_service(self.provider.client, "openai")
-                logger.info(
-                    f"OpenAI provider initialized with model: {self.config.model.model}"
-                )
+                if self.provider.client:
+                    self.kernel.add_service(self.provider.client)
+                logger.info(f"OpenAI provider initialized with model: {self.config.model.model}")
             elif provider_type == "ollama":
                 from ..models.ollama import OllamaProvider
 
                 self.provider = OllamaProvider(self.config.model)
                 # Register the provider with the kernel
-                self.kernel.add_service(self.provider.client, "ollama")
-                logger.info(
-                    f"Ollama provider initialized with model: {self.config.model.model}"
-                )
+                if self.provider.client:
+                    self.kernel.add_service(self.provider.client)
+                # Register the kernel with the provider for function calling
+                if hasattr(self.provider, "register_kernel"):
+                    self.provider.register_kernel(self.kernel)
+                logger.info(f"Ollama provider initialized with model: {self.config.model.model}")
             else:
                 raise ValueError(f"Unsupported provider type: {provider_type}")
             logger.debug("Model provider initialized: %s", self.provider)
 
             # Initialize plugins
             await self._init_plugins()
-            logger.info("Agent initialization complete")
+            logger.debug("Plugins initialized")
 
         except Exception as e:
-            logger.error("Failed to initialize agent", exc_info=e)
+            logger.error("Error initializing agent", extra={"error": str(e)}, exc_info=e)
             raise self._create_agent_error(
                 message="Failed to initialize agent",
                 context=context,
                 cause=e,
-                recovery_hint="Check configuration and provider settings",
+                recovery_hint="Check configuration and model availability",
             ) from e
 
     async def _init_plugins(self) -> None:
-        """Initialize agent plugins"""
+        """Initialize agent plugins."""
         try:
             context = await self._handle_agent_operation("init_plugins")
             logger.debug("Initializing plugins with context: %s", context)
@@ -126,9 +135,7 @@ class Agent:
             # Load configured plugins
             logger.info(f"Loading {len(self.config.plugins)} plugins")
             for i, plugin_config in enumerate(self.config.plugins):
-                logger.debug(
-                    f"Loading plugin {i+1}/{len(self.config.plugins)} with config: {plugin_config}"
-                )
+                logger.debug(f"Loading plugin {i+1}/{len(self.config.plugins)} with config: {plugin_config}")
                 try:
                     logger.debug(f"Plugin source: {plugin_config.source}")
                     logger.debug(f"Plugin variables: {plugin_config.variables}")
@@ -137,33 +144,26 @@ class Agent:
                     )
 
                     # Log plugin details
-                    logger.info(
-                        f"Plugin loaded: name={plugin_instance.name}, class={plugin_instance.__class__.__name__}"
-                    )
+                    logger.info(f"Plugin loaded: name={plugin_instance.name}, class={plugin_instance.__class__.__name__}")
                     logger.debug(f"Plugin description: {plugin_instance.description}")
-                    logger.debug(
-                        f"Plugin instructions: {plugin_instance.plugin_instructions}"
-                    )
+                    logger.debug(f"Plugin instructions: {plugin_instance.plugin_instructions}")
 
                     # Register plugin with the kernel
-                    logger.debug(
-                        f"Registering plugin {plugin_instance.name} with kernel"
-                    )
+                    logger.debug(f"Registering plugin {plugin_instance.name} with kernel")
                     self.kernel.add_plugin(plugin_instance, plugin_instance.name)
                     logger.info(f"Plugin {plugin_instance.name} registered with kernel")
 
                     # Log available functions
                     kernel_functions = plugin_instance.__class__.get_kernel_functions()
                     logger.debug(
-                        f"Plugin {plugin_instance.name} has {len(kernel_functions)} kernel functions: {list(kernel_functions.keys())}"
+                        f"Plugin {plugin_instance.name} has {len(kernel_functions)} kernel functions: "
+                        f"{list(kernel_functions.keys())}"
                     )
                 except Exception as e:
                     logger.error(f"Error loading plugin: {e}", exc_info=e)
                     raise
 
-                logger.debug(
-                    f"Plugin {i+1}/{len(self.config.plugins)} loaded and registered successfully"
-                )
+                logger.debug(f"Plugin {i+1}/{len(self.config.plugins)} loaded and registered successfully")
 
             # Add chat function to kernel
             logger.debug("Adding chat function to kernel")
@@ -204,22 +204,16 @@ class Agent:
             plugin_instructions = []
             for plugin_class, plugin_instance in self.plugin_manager.plugins.values():
                 if plugin_instance.plugin_instructions:
-                    plugin_instructions.append(
-                        f"{plugin_instance.name}: {plugin_instance.plugin_instructions}"
-                    )
+                    plugin_instructions.append(f"{plugin_instance.name}: {plugin_instance.plugin_instructions}")
 
             if plugin_instructions:
                 context += "\n\nAvailable plugins:\n" + "\n".join(plugin_instructions)
-                logger.debug(
-                    f"Added plugin instructions to context: {plugin_instructions}"
-                )
+                logger.debug(f"Added plugin instructions to context: {plugin_instructions}")
 
         return context
 
-    async def process_message(
-        self, message: Message, context: ConversationContext
-    ) -> AsyncGenerator[str, None]:
-        """Process a message and generate responses"""
+    async def process_message(self, message: Message, context: ConversationContext) -> AsyncGenerator[str, None]:
+        """Process a message and generate responses."""
         # Initialize operation_context to None before the try block
         operation_context = None
 
@@ -256,12 +250,12 @@ class Agent:
                     from semantic_kernel.connectors.ai.function_choice_behavior import (
                         FunctionChoiceBehavior,
                     )
-                    from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.open_ai_prompt_execution_settings import (
-                        OpenAIChatPromptExecutionSettings,
+                    from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings import (
+                        open_ai_prompt_execution_settings as openai_settings,
                     )
 
                     logger.debug("Creating OpenAI chat settings")
-                    settings = OpenAIChatPromptExecutionSettings(
+                    settings = openai_settings.OpenAIChatPromptExecutionSettings(
                         temperature=self.config.model.temperature,
                         max_tokens=self.config.model.max_tokens,
                         top_p=self.config.model.top_p,
@@ -279,9 +273,7 @@ class Agent:
                         user_input=message.content,
                         settings=settings,
                     )
-                    logger.debug(
-                        f"Created kernel arguments with user input: {message.content[:50]}..."
-                    )
+                    logger.debug(f"Created kernel arguments with user input: {message.content[:50]}...")
 
                     # Stream the response
                     streamed_assistant_chunks = []
@@ -299,9 +291,7 @@ class Agent:
                             logger.debug(f"Received result type: {type(result)}")
                             if isinstance(result, list) and len(result) > 0:
                                 msg = result[0]
-                                logger.debug(
-                                    f"Result item type: {type(msg)}, role: {getattr(msg, 'role', 'unknown')}"
-                                )
+                                logger.debug(f"Result item type: {type(msg)}, role: {getattr(msg, 'role', 'unknown')}")
 
                                 if isinstance(msg, StreamingChatMessageContent):
                                     if msg.role == AuthorRole.ASSISTANT:
@@ -317,18 +307,15 @@ class Agent:
                                         # Log extra details about the tool message
                                         if hasattr(msg, "function_invoke_attempt"):
                                             logger.debug(
-                                                f"Tool message has function_invoke_attempt: {getattr(msg, 'function_invoke_attempt')}"
+                                                f"Tool message has function_invoke_attempt: "
+                                                f"{getattr(msg, 'function_invoke_attempt')}"
                                             )
                                         if hasattr(msg, "items"):
-                                            logger.debug(
-                                                f"Tool message items: {getattr(msg, 'items')}"
-                                            )
+                                            logger.debug(f"Tool message items: {getattr(msg, 'items')}")
                                         streamed_tool_chunks.append(msg)
                                         # Don't yield tool messages to avoid mixing message types
                                     else:
-                                        logger.debug(
-                                            f"Other message type with role {msg.role}: {msg}"
-                                        )
+                                        logger.debug(f"Other message type with role {msg.role}: {msg}")
                     except ContentAdditionException as e:
                         # Handle the ContentAdditionException gracefully
                         logger.warning(
@@ -344,64 +331,47 @@ class Agent:
 
                     # Process tool messages if any
                     if streamed_tool_chunks:
-                        logger.debug(
-                            f"Processing {len(streamed_tool_chunks)} tool messages"
-                        )
+                        logger.debug(f"Processing {len(streamed_tool_chunks)} tool messages")
                         try:
                             # Group tool chunks by function_invoke_attempt if available
-                            grouped_chunks = {}
+                            grouped_chunks: Dict[int, List[Any]] = {}
                             for chunk in streamed_tool_chunks:
                                 key = getattr(chunk, "function_invoke_attempt", 0)
                                 if key not in grouped_chunks:
                                     grouped_chunks[key] = []
                                 grouped_chunks[key].append(chunk)
 
-                            # Log tool calls for debugging
+                            # Process tool calls and extract results
                             for attempt, chunks in grouped_chunks.items():
-                                logger.debug(
-                                    f"Tool call attempt {attempt} with {len(chunks)} chunks"
-                                )
-                                # Log the content of the first chunk for diagnostics
+                                logger.debug(f"Tool call attempt {attempt} with {len(chunks)} chunks")
+                                # Extract and yield function results
                                 if chunks:
-                                    first_chunk = chunks[0]
-                                    logger.debug(
-                                        f"First chunk in attempt {attempt}: {first_chunk}"
-                                    )
-                                    if hasattr(first_chunk, "content"):
-                                        logger.debug(f"Content: {first_chunk.content}")
-                                    if hasattr(first_chunk, "items"):
-                                        logger.debug(f"Items: {first_chunk.items}")
-                                # We don't need to do anything with these right now
-                                # In the future, we could process these tool calls
+                                    for chunk in chunks:
+                                        # Check if this chunk has items with function results
+                                        if hasattr(chunk, "items"):
+                                            for item in chunk.items:
+                                                if hasattr(item, "content_type") and item.content_type == "function_result":
+                                                    if hasattr(item, "result") and item.result:
+                                                        # This is a function result, yield the actual result
+                                                        logger.debug(f"Found function result: {item.result}")
+                                                        # Replace the complete_assistant_response with the function result
+                                                        complete_assistant_response = str(item.result)
+                                                        # We've already yielded chunks, so we don't need to yield again
                         except Exception as e:
-                            logger.error(
-                                f"Error processing tool chunks: {e}", exc_info=e
-                            )
+                            logger.error(f"Error processing tool chunks: {e}", exc_info=e)
 
                     # After streaming is complete, add the assistant's complete response to history
-                    if streamed_assistant_chunks:
-                        logger.debug(
-                            f"Adding assistant response to history: {complete_assistant_response[:50]}..."
-                        )
-                        logger.debug(
-                            f"Chat history before adding response has {len(history.messages)} messages"
-                        )
-                        await context.add_message(
-                            Message(
-                                content=complete_assistant_response, role="assistant"
-                            )
-                        )
-                        logger.debug(
-                            f"Chat history after adding response has {len(history.messages)} messages"
-                        )
+                    if streamed_assistant_chunks or complete_assistant_response:
+                        logger.debug(f"Adding assistant response to history: {complete_assistant_response[:50]}...")
+                        logger.debug(f"Chat history before adding response has {len(history.messages)} messages")
+                        await context.add_message(Message(content=complete_assistant_response, role="assistant"))
+                        logger.debug(f"Chat history after adding response has {len(history.messages)} messages")
                 except Exception as e:
                     logger.error("Error executing chat function", exc_info=e)
                     yield f"\n\nError executing chat function: {str(e)}"
 
             # Use the retry handler with the process function
-            async for chunk in self.retry_handler.retry_generator(
-                _process, operation_context
-            ):
+            async for chunk in self.retry_handler.retry_generator(_process, operation_context):
                 yield chunk
 
         except Exception as e:
@@ -417,9 +387,7 @@ class Agent:
                     },
                 )
 
-            logger.error(
-                "Error processing message", extra={"error": str(e)}, exc_info=e
-            )
+            logger.error("Error processing message", extra={"error": str(e)}, exc_info=e)
 
             if isinstance(e, AgentError):
                 raise

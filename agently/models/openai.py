@@ -1,5 +1,4 @@
-"""
-OpenAI model provider implementation.
+"""OpenAI model provider implementation.
 
 This module provides integration with OpenAI's API, including:
 - Chat completions with streaming support
@@ -8,9 +7,8 @@ This module provides integration with OpenAI's API, including:
 """
 
 import os
-from typing import AsyncIterator, Optional
+from typing import Any, AsyncIterator
 
-from semantic_kernel import Kernel
 from semantic_kernel.connectors.ai.function_choice_behavior import (
     FunctionChoiceBehavior,
 )
@@ -51,9 +49,7 @@ class OpenAIProvider(ModelProvider):
         if not api_key:
             raise ModelError(
                 message="OpenAI API key not found in environment",
-                context=ErrorContext(
-                    component="openai_provider", operation="initialize"
-                ),
+                context=ErrorContext(component="openai_provider", operation="initialize"),
                 recovery_hint="Set OPENAI_API_KEY environment variable",
             )
         self.client = OpenAIChatCompletion(
@@ -62,14 +58,11 @@ class OpenAIProvider(ModelProvider):
         )
         self.service_id = "openai"
 
-    async def chat(
-        self, history: ChatHistory, kernel: Optional[Kernel] = None, **kwargs
-    ) -> AsyncIterator[str]:
+    async def chat(self, history: ChatHistory, **kwargs: Any) -> AsyncIterator[str]:
         """Process a chat message using OpenAI's streaming API.
 
         Args:
             history: Chat history to use for context
-            kernel: Optional kernel instance for function calling
             **kwargs: Additional arguments to pass to the API
 
         Yields:
@@ -85,6 +78,9 @@ class OpenAIProvider(ModelProvider):
                 messages=history.messages,
             )
 
+            # Extract kernel from kwargs if provided
+            kernel = kwargs.pop("kernel", None)
+
             # Build settings dictionary from config
             settings = OpenAIChatPromptExecutionSettings(
                 temperature=self.config.temperature,
@@ -97,11 +93,14 @@ class OpenAIProvider(ModelProvider):
 
             # Add function definitions if kernel is provided
             if kernel:
+                from typing import cast
+
                 from ..plugins import PluginManager
+                from ..plugins.base import Plugin
 
                 plugin_manager = PluginManager()
                 plugin_manager.plugins = {
-                    name: (None, plugin) for name, plugin in kernel.plugins.items()
+                    name: (cast(None, None), cast(Plugin, plugin)) for name, plugin in kernel.plugins.items()
                 }
                 functions = plugin_manager.get_openai_functions()
                 settings.tools = functions.get("functions", [])
@@ -125,9 +124,7 @@ class OpenAIProvider(ModelProvider):
                 )
 
         except Exception as e:
-            error = self._create_model_error(
-                message=f"Unexpected error: {str(e)}", context=context, cause=e
-            )
+            error = self._create_model_error(message=f"Unexpected error: {str(e)}", context=context, cause=e)
             yield f"Error: {str(error)} - {error.recovery_hint}"
 
     async def get_embeddings(self, text: str) -> list[float]:
@@ -143,15 +140,18 @@ class OpenAIProvider(ModelProvider):
             ModelError: For API errors or unexpected issues
         """
         try:
-            context = await self._handle_api_call(
-                "embeddings", model="text-embedding-ada-002", text=text
-            )
+            context = await self._handle_api_call("embeddings", model="text-embedding-ada-002", text=text)
 
             async def _make_request():
                 try:
-                    response = await self.client.embeddings.create(
-                        model="text-embedding-ada-002", input=text
-                    )
+                    # Import OpenAI client directly for embeddings
+                    from openai import AsyncOpenAI
+
+                    # Create a client instance
+                    openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+                    # Get embeddings
+                    response = await openai_client.embeddings.create(model="text-embedding-ada-002", input=text)
                     return response.data[0].embedding
                 except Exception as e:
                     raise ModelError(

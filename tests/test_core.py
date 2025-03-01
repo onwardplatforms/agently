@@ -8,7 +8,7 @@ import pytest
 
 from agently.core import configure_logging, get_error_handler
 from agently.errors import ErrorHandler
-from agently.utils import LogLevel
+from agently.utils.logging import LogLevel
 
 
 def test_logging_configuration_default(caplog):

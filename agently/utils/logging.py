@@ -1,10 +1,22 @@
+"""Logging utilities for the Agently framework.
+
+This module provides logging configuration and helper functions to manage
+logging levels and output formats across the framework.
+"""
+
 import logging
 import sys
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Union
 
 
 # Define log levels for easier reference
 class LogLevel:
+    """Log level constants for the Agently framework.
+
+    Includes standard Python logging levels plus a custom NONE level
+    to completely disable logging.
+    """
+
     # Standard log levels
     DEBUG = logging.DEBUG
     INFO = logging.INFO
@@ -34,7 +46,7 @@ def configure_logging(
         log_file: Optional file path to write logs to
     """
     # Set up handlers
-    handlers = []
+    handlers: List[Union[logging.StreamHandler, logging.FileHandler]] = []
 
     # Always add console handler
     console_handler = logging.StreamHandler(sys.stdout)

@@ -1,6 +1,4 @@
-"""
-Core functionality for the agent runtime.
-"""
+"""Core functionality for the agent runtime."""
 
 import logging
 import os
@@ -16,19 +14,13 @@ def configure_logging():
     log_level = getattr(logging, log_level_str, logging.WARNING)
 
     # Get log format from environment (with default)
-    log_format = os.getenv(
-        "LOG_FORMAT", "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
+    log_format = os.getenv("LOG_FORMAT", "%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
     # Configure root logger
     logging.basicConfig(level=log_level, format=log_format)
 
     # Configure HTTP request logging
-    http_level = (
-        log_level
-        if os.getenv("LOG_HTTP_REQUESTS", "false").lower() == "true"
-        else logging.WARNING
-    )
+    http_level = log_level if os.getenv("LOG_HTTP_REQUESTS", "false").lower() == "true" else logging.WARNING
     logging.getLogger("httpx").setLevel(http_level)
     logging.getLogger("httpcore").setLevel(http_level)
 
