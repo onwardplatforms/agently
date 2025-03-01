@@ -8,6 +8,14 @@ import click
 from agently.agents.agent import Agent
 from agently.config.types import AgentConfig
 from agently.conversation.context import ConversationContext, Message
+from agently.utils import (
+    blue,
+    bold,
+    get_formatted_output,
+    gray,
+    green,
+    reset_function_state,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,15 +36,24 @@ async def _run_interactive_loop(agent_config: AgentConfig):
     context = ConversationContext(conversation_id=f"cli-{agent_config.id}")
     logger.debug(f"Created conversation context with ID: {context.id}")
 
-    # Welcome message
-    click.echo(f"\n===== Agent: {agent_config.name} =====")
-    click.echo("Type 'exit' to quit, or 'help' for more commands.")
+    # Construct a simplified welcome message
+    provider = agent_config.model.provider if hasattr(agent_config.model, "provider") else "unknown"
+    model_name = agent_config.model.model if hasattr(agent_config.model, "model") else str(agent_config.model)
+
+    # Welcome message with minimal but informative details
+    click.echo(
+        f"\nThe agent {bold(green(agent_config.name))} has been initialized using {blue(provider)} {blue(model_name)}"
+    )
+    if agent_config.description:
+        click.echo(f"{agent_config.description}")
+
+    click.echo(f"\n{gray('Type a message to begin. Type exit to quit.')}\n")
 
     # Main loop
     while True:
         try:
             # Get user input
-            user_input = click.prompt("\nYou", prompt_suffix="> ")
+            user_input = click.prompt("You", prompt_suffix="> ")
             logger.debug(f"User input: {user_input}")
 
             # Check for exit
@@ -44,23 +61,62 @@ async def _run_interactive_loop(agent_config: AgentConfig):
                 logger.info("User requested exit")
                 break
 
-            # Check for help
-            if user_input.lower() == "help":
-                click.echo("\nAvailable commands:")
-                click.echo("  exit/quit - Exit the agent")
-                click.echo("  help      - Show this help message")
-                continue
-
             # Process message
             logger.info(f"Processing user message: {user_input[:50]}...")
             message = Message(content=user_input, role="user")
 
-            # Display response
+            # Reset the function state before processing the message
+            reset_function_state()
+
+            # Display the prompt with newline before but not after
             click.echo("\nAssistant> ", nl=False)
-            response_text = ""
+
+            # Process and collect response chunks
+            response_chunks = []
+
+            # For real-time function call display
+            last_function_output = ""
+            has_function_output = False
+
             async for chunk in agent.process_message(message, context):
-                click.echo(chunk, nl=False)
-                response_text += chunk
+                # Store the chunk
+                if chunk:
+                    response_chunks.append(chunk)
+
+                # Check for new function calls in real-time
+                current_function_output = get_formatted_output()
+                if current_function_output != last_function_output:
+                    # Only output the new function calls
+                    if not has_function_output:
+                        # First function output - add a single newline
+                        click.echo("\n", nl=False)
+                        has_function_output = True
+
+                    if last_function_output:
+                        # If we already had function output, just add the new lines
+                        new_lines = current_function_output.split("\n")[len(last_function_output.split("\n")) :]
+                        if new_lines:
+                            click.echo("\n".join(new_lines), nl=False)
+                    else:
+                        # First function call
+                        click.echo(current_function_output, nl=False)
+
+                    last_function_output = current_function_output
+
+            # For cleaner output - add a newline after the prompt in all cases
+            if not has_function_output:
+                click.echo()
+
+            # Add a single newline after function calls before response
+            if has_function_output:
+                click.echo("\n")
+
+            # Display the actual response content
+            response_text = "".join(response_chunks)
+            click.echo(response_text)
+
+            # Add a newline after the response
+            click.echo()
 
             logger.debug(f"Agent response complete: {len(response_text)} chars")
 

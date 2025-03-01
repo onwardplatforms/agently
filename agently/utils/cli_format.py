@@ -5,6 +5,59 @@ including colored text and function call formatting.
 """
 
 import sys
+from typing import List
+
+# Track function call state for formatting
+_function_calls: List[str] = []
+_function_state_reset: bool = True
+
+
+def reset_function_state():
+    """Reset the function call state to start fresh for each interaction."""
+    global _function_calls, _function_state_reset
+    _function_calls = []
+    _function_state_reset = True
+
+
+def get_formatted_output():
+    """Get all formatted output based on current state.
+
+    Returns:
+        str: Properly formatted output with all function calls
+    """
+    global _function_calls
+
+    if not _function_calls:
+        return ""
+
+    # Format function calls without adding surrounding newlines
+    # (newlines are handled in interactive.py)
+    function_lines = []
+    for call in _function_calls:
+        function_lines.append(f"{gray('→ ' + call + ' ...')}")
+
+    # Return function calls with a single newline between content
+    # No trailing newline - that's handled in interactive.py
+    return "\n".join(function_lines)
+
+
+def register_function_call(message):
+    """Register a function call to be formatted later.
+
+    Args:
+        message: The function call message
+
+    Returns:
+        str: Empty string as we don't output immediately
+    """
+    global _function_calls, _function_state_reset
+
+    if _function_state_reset:
+        _function_calls = []
+        _function_state_reset = False
+
+    _function_calls.append(message)
+    return ""  # Don't output anything now, output is handled centrally
 
 
 class Colors:
@@ -171,21 +224,21 @@ def format_action(message: str) -> str:
         message (str): The action message
 
     Returns:
-        str: Formatted action message with prefix
+        str: Empty string, as we just register the call
     """
-    return f"\n{gray('┌')} {gray(message)}"
+    return register_function_call(message)
 
 
-def format_subaction(message: str) -> str:
-    """Format a plugin sub-action message.
+def print_agent_message(message: str) -> str:
+    """Print an agent action message with arrow.
 
     Args:
-        message (str): The sub-action message
+        message (str): The message content
 
     Returns:
-        str: Formatted sub-action message with prefix
+        str: Empty string, as we just register the call
     """
-    return f"{gray('├─')} {gray(message)}"
+    return register_function_call(message)
 
 
 def format_result(message: str, success: bool = True) -> str:
@@ -198,9 +251,9 @@ def format_result(message: str, success: bool = True) -> str:
     Returns:
         str: Formatted result message with appropriate color
     """
-    color = green if success else red
-    symbol = "✓" if success else "✗"
-    return f"{gray('└')} {color(f'{symbol} {message}')}\n"
+    if success:
+        return ""  # Don't show success results (avoid duplicating the final output)
+    return register_function_call(f"✗ {message}")
 
 
 def format_file_header(path: str, start_line: int = None, end_line: int = None) -> str:
@@ -229,20 +282,26 @@ def format_function_call(plugin_name, function_name, args=None):
         args (dict, optional): Function arguments
 
     Returns:
-        str: Formatted function call message
+        str: Empty string, as we just register the call
     """
-    args_str = ""
-    if args:
-        args_parts = []
-        for key, value in args.items():
-            if isinstance(value, str):
-                args_parts.append(f'{key}="{value}"')
-            else:
-                args_parts.append(f"{key}={value}")
-        args_str = ", ".join(args_parts)
+    # Create a more conversational message based on function name and args
+    message = function_name.replace("_", " ")
 
-    message = f"[Function Call] {plugin_name}.{function_name}({args_str})"
-    return gray(message)
+    # Add specific details for common functions
+    if function_name == "greet":
+        message = "saying hello"
+    elif function_name == "search" and args and "query" in args:
+        message = f"searching for '{args['query']}'"
+    elif function_name == "calculate" and args:
+        message = "calculating result"
+    elif function_name == "remember_name" and args and "name" in args:
+        message = "remembering name"
+    elif function_name == "time_greeting":
+        message = "creating time-based greeting"
+    elif function_name == "farewell":
+        message = "saying goodbye"
+
+    return register_function_call(message)
 
 
 def format_function_result(plugin_name, function_name, result):
@@ -251,10 +310,10 @@ def format_function_result(plugin_name, function_name, result):
     Args:
         plugin_name (str): The name of the plugin
         function_name (str): The name of the function
-        result (str): The function result
+        result: The function result
 
     Returns:
-        str: Formatted function result message
+        str: Empty string, as function results are part of the response
     """
-    message = f"[Function Result] {plugin_name}.{function_name} → {result}"
-    return gray(message)
+    # Don't show function results to avoid duplicating the final output
+    return ""

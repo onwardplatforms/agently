@@ -9,10 +9,12 @@ from .cli_format import (  # Basic color functions; Function call formatting; Pl
     format_function_call,
     format_function_result,
     format_result,
-    format_subaction,
+    get_formatted_output,
     gray,
     green,
     magenta,
+    print_agent_message,
     red,
+    reset_function_state,
     yellow,
 )
