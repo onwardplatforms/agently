@@ -1,17 +1,15 @@
 """Plugin source handling system."""
 
 import importlib.util
+import json
 import logging
+import re
 import subprocess
 import sys
-import tempfile
-import json
-import re
-import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Type, Dict, Any, Tuple
+from typing import Any, Dict, Optional, Type
 
 from .base import Plugin
 
