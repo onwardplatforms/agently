@@ -1,0 +1,14 @@
+{
+  "plugins": {
+    "local/hello": {
+      "namespace": "local",
+      "name": "hello",
+      "full_name": "hello",
+      "version": "local",
+      "source_type": "local",
+      "source_path": "/Users/justinoconnor/Code/onward/agently/examples/hello_local/plugins/hello",
+      "sha": "a2e6969e4f66569858c681c36e1bbe1152653013973bbc91c92649384a64eb87",
+      "installed_at": "2025-03-02T03:44:53.925082"
+    }
+  }
+}

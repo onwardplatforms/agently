@@ -9,7 +9,7 @@ model:
   temperature: 0.5
 plugins:
   github:
-    - repo: "github.com/onwardplatforms/agently-plugin-hello"
+    - source: "onwardplatforms/hello"
       version: "main"
       variables:
         default_name: "Remote Friend"

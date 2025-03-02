@@ -35,7 +35,7 @@ model:
   temperature: 0.7
 plugins:
   local:
-    - path: "./plugins/test"
+    - source: "./plugins/test"
       variables:
         test_var: "test_value"
         default_name: "TestFriend"
@@ -170,22 +170,12 @@ def test_environment_variable_precedence(temp_yaml_with_env_vars, temp_dotenv_fi
 
             # Verify variable precedence in system prompt
             # SHARED_VAR should come from system env, not .env or config
-            assert (
-                "You are a test assistant with from_system_env and config_value."
-                in config.system_prompt
-            )
+            assert "You are a test assistant with from_system_env and config_value." in config.system_prompt
 
             # Also test direct variable resolution
-            assert (
-                resolve_environment_variables("${{ env.SHARED_VAR }}")
-                == "from_system_env"
-            )
-            assert (
-                resolve_environment_variables("${{ env.CONFIG_VAR }}") == "config_value"
-            )
-            assert (
-                resolve_environment_variables("${{ env.TEST_VAR }}") == "dotenv_value"
-            )
+            assert resolve_environment_variables("${{ env.SHARED_VAR }}") == "from_system_env"
+            assert resolve_environment_variables("${{ env.CONFIG_VAR }}") == "config_value"
+            assert resolve_environment_variables("${{ env.TEST_VAR }}") == "dotenv_value"
 
 
 def test_load_agent_config_with_missing_env_var(temp_yaml_config):

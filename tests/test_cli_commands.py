@@ -31,7 +31,7 @@ model:
   temperature: 0.7
 plugins:
   local:
-    - path: "./plugins/test"
+    - source: "./plugins/test"
       variables:
         test_var: "test_value"
         default_name: "CLIFriend"

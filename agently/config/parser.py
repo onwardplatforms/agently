@@ -165,7 +165,7 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
     # Process local plugins
     for local_plugin in plugins_yaml.get("local", []):
         # Resolve relative path from config file location
-        plugin_path = local_plugin["path"]
+        plugin_path = local_plugin["source"]
         if not os.path.isabs(plugin_path):
             plugin_path = (config_path.parent / plugin_path).resolve()
 
@@ -175,7 +175,7 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
     # Process GitHub plugins
     for github_plugin in plugins_yaml.get("github", []):
         github_source: PluginSourceType = GitHubPluginSource(
-            repo_url=github_plugin["repo"],
+            repo_url=github_plugin["source"],
             version=github_plugin.get("version", "main"),  # Default to main if not specified
             plugin_path=github_plugin.get("plugin_path", ""),
             namespace=github_plugin.get("namespace", ""),

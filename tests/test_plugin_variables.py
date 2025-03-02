@@ -26,15 +26,11 @@ class MockPlugin(Plugin):
     plugin_instructions = "Test plugin instructions"
 
     # Define plugin variables as class attributes
-    string_var = PluginVariable(
-        type=str, description="A string variable", default="default string"
-    )
+    string_var = PluginVariable(type=str, description="A string variable", default="default string")
 
     int_var = PluginVariable(type=int, description="An integer variable", default=42)
 
-    bool_var = PluginVariable(
-        type=bool, description="A boolean variable", default=False
-    )
+    bool_var = PluginVariable(type=bool, description="A boolean variable", default=False)
 
     # Not required anymore - has a default
     required_var = PluginVariable(
@@ -64,7 +60,7 @@ model:
   temperature: 0.7
 plugins:
   local:
-    - path: "./mock_plugin_path"
+    - source: "./mock_plugin_path"
       variables:
         string_var: "overridden string"
         int_var: 100
@@ -154,9 +150,7 @@ async def test_yaml_config_plugin_variables(plugin_yaml_config):
 
             # Load the plugin using the config
             plugin_config = agent_config.plugins[0]
-            plugin = await plugin_manager.load_plugin(
-                plugin_config.source, plugin_config.variables
-            )
+            plugin = await plugin_manager.load_plugin(plugin_config.source, plugin_config.variables)
 
             # Check that variables from YAML were applied correctly
             assert plugin.string_var == "overridden string"
@@ -171,9 +165,7 @@ async def test_yaml_config_partial_variables(plugin_yaml_config):
 
     # Create a MockPlugin subclass with additional variables
     class ExtendedMockPlugin(MockPlugin):
-        extra_var = PluginVariable(
-            type=str, description="An extra variable", default="extra default"
-        )
+        extra_var = PluginVariable(type=str, description="An extra variable", default="extra default")
 
     # Patch the LocalPluginSource.load method to return our ExtendedMockPlugin
     with patch(
@@ -190,9 +182,7 @@ async def test_yaml_config_partial_variables(plugin_yaml_config):
 
             # Load the plugin using the config
             plugin_config = agent_config.plugins[0]
-            plugin = await plugin_manager.load_plugin(
-                plugin_config.source, plugin_config.variables
-            )
+            plugin = await plugin_manager.load_plugin(plugin_config.source, plugin_config.variables)
 
             # Check that variables from YAML were applied correctly
             assert plugin.string_var == "overridden string"
