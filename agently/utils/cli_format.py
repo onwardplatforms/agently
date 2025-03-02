@@ -5,7 +5,8 @@ including colored text and function call formatting.
 """
 
 import sys
-from typing import List
+from enum import Enum
+from typing import Dict, List, Optional, Set
 
 # Track function call state for formatting
 _function_calls: List[str] = []
@@ -60,33 +61,142 @@ def register_function_call(message):
     return ""  # Don't output anything now, output is handled centrally
 
 
-class Colors:
+# ANSI color codes
+class Color:
     """ANSI color codes for terminal output."""
-
     RESET = "\033[0m"
     BOLD = "\033[1m"
-    ITALIC = "\033[3m"
-    UNDERLINE = "\033[4m"
-
-    # Normal colors
-    BLACK = "\033[30m"
-    RED = "\033[31m"
     GREEN = "\033[32m"
     YELLOW = "\033[33m"
     BLUE = "\033[34m"
-    MAGENTA = "\033[35m"
     CYAN = "\033[36m"
-    WHITE = "\033[37m"
-    GRAY = "\033[90m"  # Actually bright black
+    RED = "\033[31m"
+    GRAY = "\033[90m"
 
-    # Bright colors
-    BRIGHT_RED = "\033[91m"
-    BRIGHT_GREEN = "\033[92m"
-    BRIGHT_YELLOW = "\033[93m"
-    BRIGHT_BLUE = "\033[94m"
-    BRIGHT_MAGENTA = "\033[95m"
-    BRIGHT_CYAN = "\033[96m"
-    BRIGHT_WHITE = "\033[97m"
+
+class PluginStatus(Enum):
+    """Status of a plugin during initialization."""
+    ADDED = "added"
+    UPDATED = "updated"
+    UNCHANGED = "unchanged"
+    REMOVED = "removed"
+    FAILED = "failed"
+
+
+def format_plugin_status(status: PluginStatus, plugin_key: str, details: Optional[str] = None) -> str:
+    """Format a plugin status message in Terraform-like style.
+    
+    Args:
+        status: The status of the plugin
+        plugin_key: The plugin identifier (namespace/name)
+        details: Optional details about the plugin (version, path, etc.)
+        
+    Returns:
+        Formatted status message
+    """
+    prefix = "  "
+    
+    if status == PluginStatus.ADDED:
+        status_str = f"{Color.GREEN}+ {plugin_key}{Color.RESET}"
+    elif status == PluginStatus.UPDATED:
+        status_str = f"{Color.YELLOW}~ {plugin_key}{Color.RESET}"
+    elif status == PluginStatus.UNCHANGED:
+        status_str = f"{Color.GRAY}  {plugin_key}{Color.RESET}"
+    elif status == PluginStatus.REMOVED:
+        status_str = f"{Color.RED}- {plugin_key}{Color.RESET}"
+    elif status == PluginStatus.FAILED:
+        status_str = f"{Color.RED}× {plugin_key}{Color.RESET}"
+    else:
+        status_str = f"  {plugin_key}"
+    
+    if details:
+        return f"{prefix}{status_str} ({details})"
+    else:
+        return f"{prefix}{status_str}"
+
+
+def format_section_header(title: str) -> str:
+    """Format a section header in Terraform-like style.
+    
+    Args:
+        title: The section title
+        
+    Returns:
+        Formatted section header
+    """
+    return f"{Color.BOLD}{title}:{Color.RESET}"
+
+
+def format_plan_summary(added: int, updated: int, unchanged: int, removed: int, failed: int = 0) -> str:
+    """Format a plan summary in Terraform-like style.
+    
+    Args:
+        added: Number of plugins to be added
+        updated: Number of plugins to be updated
+        unchanged: Number of plugins that are unchanged
+        removed: Number of plugins to be removed
+        failed: Number of plugins that failed to process
+        
+    Returns:
+        Formatted plan summary
+    """
+    parts = []
+    
+    if added > 0:
+        parts.append(f"{Color.GREEN}+{added} to add{Color.RESET}")
+    
+    if updated > 0:
+        parts.append(f"{Color.YELLOW}~{updated} to update{Color.RESET}")
+    
+    if unchanged > 0:
+        parts.append(f"{unchanged} unchanged")
+    
+    if removed > 0:
+        parts.append(f"{Color.RED}-{removed} to remove{Color.RESET}")
+    
+    if failed > 0:
+        parts.append(f"{Color.RED}{failed} failed{Color.RESET}")
+    
+    if not parts:
+        return "No changes. Your plugin configuration is up to date."
+    
+    return "Plan: " + ", ".join(parts)
+
+
+def format_apply_summary(added: int, updated: int, unchanged: int, removed: int, failed: int = 0) -> str:
+    """Format an apply summary in Terraform-like style.
+    
+    Args:
+        added: Number of plugins added
+        updated: Number of plugins updated
+        unchanged: Number of plugins that were unchanged
+        removed: Number of plugins removed
+        failed: Number of plugins that failed to process
+        
+    Returns:
+        Formatted apply summary
+    """
+    parts = []
+    
+    if added > 0:
+        parts.append(f"{Color.GREEN}{added} added{Color.RESET}")
+    
+    if updated > 0:
+        parts.append(f"{Color.YELLOW}{updated} updated{Color.RESET}")
+    
+    if unchanged > 0:
+        parts.append(f"{unchanged} unchanged")
+    
+    if removed > 0:
+        parts.append(f"{Color.RED}{removed} removed{Color.RESET}")
+    
+    if failed > 0:
+        parts.append(f"{Color.RED}{failed} failed{Color.RESET}")
+    
+    if not parts:
+        return "No changes applied. Your plugin configuration is up to date."
+    
+    return "Apply complete! Resources: " + ", ".join(parts)
 
 
 def format_text(text, color=None, bold=False, italic=False, underline=False):
@@ -108,15 +218,15 @@ def format_text(text, color=None, bold=False, italic=False, underline=False):
 
     result = ""
     if bold:
-        result += Colors.BOLD
+        result += Color.BOLD
     if italic:
-        result += Colors.ITALIC
+        result += Color.ITALIC
     if underline:
-        result += Colors.UNDERLINE
+        result += Color.UNDERLINE
     if color:
         result += color
 
-    result += str(text) + Colors.RESET
+    result += str(text) + Color.RESET
     return result
 
 
@@ -129,7 +239,7 @@ def gray(text):
     Returns:
         str: Gray-colored text
     """
-    return format_text(text, color=Colors.GRAY)
+    return format_text(text, color=Color.GRAY)
 
 
 def green(text):
@@ -141,7 +251,7 @@ def green(text):
     Returns:
         str: Green-colored text
     """
-    return format_text(text, color=Colors.GREEN)
+    return format_text(text, color=Color.GREEN)
 
 
 def yellow(text):
@@ -153,7 +263,7 @@ def yellow(text):
     Returns:
         str: Yellow-colored text
     """
-    return format_text(text, color=Colors.YELLOW)
+    return format_text(text, color=Color.YELLOW)
 
 
 def red(text):
@@ -165,7 +275,7 @@ def red(text):
     Returns:
         str: Red-colored text
     """
-    return format_text(text, color=Colors.RED)
+    return format_text(text, color=Color.RED)
 
 
 def blue(text):
@@ -177,7 +287,7 @@ def blue(text):
     Returns:
         str: Blue-colored text
     """
-    return format_text(text, color=Colors.BLUE)
+    return format_text(text, color=Color.BLUE)
 
 
 def cyan(text):
@@ -189,7 +299,7 @@ def cyan(text):
     Returns:
         str: Cyan-colored text
     """
-    return format_text(text, color=Colors.CYAN)
+    return format_text(text, color=Color.CYAN)
 
 
 def magenta(text):
@@ -201,7 +311,7 @@ def magenta(text):
     Returns:
         str: Magenta-colored text
     """
-    return format_text(text, color=Colors.MAGENTA)
+    return format_text(text, color=Color.MAGENTA)
 
 
 def bold(text):
