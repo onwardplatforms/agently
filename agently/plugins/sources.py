@@ -9,11 +9,21 @@ import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, Optional, Type, cast
+
+from typing_extensions import Protocol
 
 from .base import Plugin
 
 logger = logging.getLogger(__name__)
+
+
+# Define a Protocol for Plugin classes
+class PluginClass(Protocol):
+    """A class that implements the Plugin interface."""
+
+    namespace: str
+    name: str
 
 
 @dataclass
@@ -170,8 +180,9 @@ class LocalPluginSource(PluginSource):
             raise ValueError(f"No Plugin subclass found in module: {module_path}")
 
         # Set the namespace and name on the plugin class
-        plugin_class.namespace = self.namespace
-        plugin_class.name = plugin_name
+        plugin_class_with_attrs = cast(PluginClass, plugin_class)
+        plugin_class_with_attrs.namespace = self.namespace
+        plugin_class_with_attrs.name = plugin_name
 
         # Note: We no longer update the lockfile here, as it's handled by the _initialize_plugins function
 
@@ -248,10 +259,11 @@ class LocalPluginSource(PluginSource):
 
         current_time = datetime.utcnow().isoformat()
 
+        plugin_class_with_attrs = cast(PluginClass, plugin_class)
         return {
-            "namespace": plugin_class.namespace,  # Store namespace
-            "name": plugin_class.name,  # Store name without prefix for consistency
-            "full_name": plugin_class.name,  # Store full name
+            "namespace": plugin_class_with_attrs.namespace,  # Store namespace
+            "name": plugin_class_with_attrs.name,  # Store name without prefix for consistency
+            "full_name": plugin_class_with_attrs.name,  # Store full name
             "version": "local",  # Local plugins don't have versions
             "source_type": "local",
             "source_path": str(self.path),
@@ -527,8 +539,9 @@ class GitHubPluginSource(PluginSource):
             raise ValueError(f"No Plugin class found in module: {module_path}")
 
         # Set the namespace and name on the plugin class
-        plugin_class.namespace = self.namespace
-        plugin_class.name = self.name
+        plugin_class_with_attrs = cast(PluginClass, plugin_class)
+        plugin_class_with_attrs.namespace = self.namespace
+        plugin_class_with_attrs.name = self.name
 
         # Note: We no longer update the lockfile here, as it's handled by the _initialize_plugins function
 

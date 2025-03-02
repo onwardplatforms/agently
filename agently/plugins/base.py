@@ -169,6 +169,7 @@ class Plugin(ABC):
     name: str
     description: str
     plugin_instructions: str
+    namespace: str = "local"  # Default namespace for plugins
 
     def __init__(self, **variables):
         """Initialize plugin with variables.

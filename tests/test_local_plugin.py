@@ -93,9 +93,24 @@ def test_local_plugin_load(mock_module_from_spec, mock_spec_from_file, mock_plug
 
     # Create a mock module with a Plugin subclass
     mock_module = MagicMock()
+    
+    # Add a Plugin base class to the module
+    plugin_base_class = type(
+        "Plugin",
+        (),
+        {
+            "name": "base_plugin",
+            "description": "Base plugin class",
+            "plugin_instructions": "Base plugin instructions",
+            "get_kernel_functions": lambda self: [],
+        },
+    )
+    mock_module.Plugin = plugin_base_class
+    
+    # Create the MockPlugin class that inherits from Plugin
     mock_plugin_class = type(
         "MockPlugin",
-        (),
+        (plugin_base_class,),  # Make it inherit from Plugin
         {
             "name": "mock_plugin",
             "description": "A mock plugin for testing",

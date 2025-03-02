@@ -293,7 +293,7 @@ def _initialize_plugins(config_path, quiet=False, force=False):
         click.echo(f"Installing local plugin: {source_path}")
 
         # Create a LocalPluginSource with the resolved path
-        source = LocalPluginSource(
+        local_source: LocalPluginSource = LocalPluginSource(
             path=Path(source_path),
             namespace="local",  # Fixed namespace for local plugins
             name=os.path.basename(source_path),  # Use directory name as plugin name
@@ -302,13 +302,13 @@ def _initialize_plugins(config_path, quiet=False, force=False):
 
         try:
             # Load plugin
-            plugin_class = source.load()
+            plugin_class = local_source.load()
 
             # Get plugin info for lockfile
-            plugin_info = source._get_plugin_info(plugin_class)
+            plugin_info = local_source._get_plugin_info(plugin_class)
 
             # Add to installed plugins
-            plugin_key = f"local/{os.path.basename(source_path)}"
+            plugin_key = f"{local_source.namespace}/{local_source.name}"
             installed_plugins.add(plugin_key)
 
             # Update lockfile with plugin info
