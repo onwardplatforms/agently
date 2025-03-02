@@ -12,3 +12,4 @@ pre-commit
 pydantic
 types-requests
 autoflake
+pytest-timeout

@@ -90,10 +90,10 @@
                     "items": {
                         "type": "object",
                         "required": [
-                            "path"
+                            "source"
                         ],
                         "properties": {
-                            "path": {
+                            "source": {
                                 "type": "string",
                                 "description": "Path to plugin (for local plugins)"
                             },
@@ -109,13 +109,13 @@
                     "items": {
                         "type": "object",
                         "required": [
-                            "repo",
+                            "source",
                             "version"
                         ],
                         "properties": {
-                            "repo": {
+                            "source": {
                                 "type": "string",
-                                "description": "GitHub repository (for github plugins)"
+                                "description": "GitHub repository source (can be 'user/name', 'github.com/user/name', or 'https://github.com/user/name')"
                             },
                             "version": {
                                 "type": "string",

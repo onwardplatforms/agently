@@ -9,7 +9,7 @@ model:
   temperature: 0.5
 plugins:
   local:
-    - path: "./plugins/hello"
+    - source: "./plugins/hello"
       variables:
         default_name: "Friend"
 # env:

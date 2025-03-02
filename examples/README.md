@@ -27,12 +27,21 @@ cd examples/hello_world
 agently run
 ```
 
-Or test the plugin directly:
+For examples using remote plugins, you may want to initialize the plugins first:
 
 ```bash
 # From the root directory
-cd examples/hello_world
-python test_plugin.py
+cd examples/hello_remote
+agently init
+agently run
+```
+
+Or just run the agent directly, which will automatically initialize plugins:
+
+```bash
+# From the root directory
+cd examples/hello_remote
+agently run
 ```
 
 ## Creating Your Own Agent
@@ -59,14 +68,14 @@ model:
   temperature: 0.7
 plugins:
   local:
-    - path: "./plugins/hello"
+    - source: "./plugins/hello"
       variables:
         default_name: "Friend"
-    - path: "./plugins/calculator"
+    - source: "./plugins/calculator"
       variables:
         precision: 2
   github:
-    - repo: "example/weather-plugin"
+    - source: "example/weather-plugin"
       version: "v1.0.0"
       plugin_path: "plugins/weather"
       variables:
