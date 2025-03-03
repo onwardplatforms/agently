@@ -71,7 +71,7 @@ async def _run_interactive_loop(agent_config: AgentConfig):
             # Display the prompt with newline before but not after
             click.echo("\nAssistant> ", nl=False)
 
-            # Process and collect response chunks
+            # For storing response chunks for history while displaying them in real-time
             response_chunks = []
 
             # For real-time function call display
@@ -79,9 +79,11 @@ async def _run_interactive_loop(agent_config: AgentConfig):
             has_function_output = False
 
             async for chunk in agent.process_message(message, context):
-                # Store the chunk
+                # Store the chunk for history
                 if chunk:
                     response_chunks.append(chunk)
+                    # Display the chunk immediately
+                    click.echo(chunk, nl=False)
 
                 # Check for new function calls in real-time
                 current_function_output = get_formatted_output()
@@ -103,21 +105,14 @@ async def _run_interactive_loop(agent_config: AgentConfig):
 
                     last_function_output = current_function_output
 
-            # For cleaner output - add a newline after the prompt in all cases
-            if not has_function_output:
-                click.echo()
-
-            # Add a single newline after function calls before response
-            if has_function_output:
-                click.echo("\n")
-
-            # Display the actual response content
-            response_text = "".join(response_chunks)
-            click.echo(response_text)
-
             # Add a newline after the response
             click.echo()
 
+            # If there were function calls, add another newline for cleaner separation
+            if has_function_output:
+                click.echo()
+
+            response_text = "".join(response_chunks)
             logger.debug(f"Agent response complete: {len(response_text)} chars")
 
         except KeyboardInterrupt:
