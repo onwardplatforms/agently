@@ -2,11 +2,17 @@
 
 This module provides formatting functions for CLI output,
 including colored text and function call formatting.
+
+Note: This module is being deprecated in favor of agently.cli.output.
+It is maintained for backward compatibility.
 """
 
 import sys
 from enum import Enum
 from typing import Dict, List, Optional, Set
+
+# Import the new centralized output system
+from agently.cli.output import cli
 
 # Track function call state for formatting
 _function_calls: List[str] = []
@@ -15,9 +21,7 @@ _function_state_reset: bool = True
 
 def reset_function_state():
     """Reset the function call state to start fresh for each interaction."""
-    global _function_calls, _function_state_reset
-    _function_calls = []
-    _function_state_reset = True
+    cli.reset_function_state()
 
 
 def get_formatted_output():
@@ -26,20 +30,7 @@ def get_formatted_output():
     Returns:
         str: Properly formatted output with all function calls
     """
-    global _function_calls
-
-    if not _function_calls:
-        return ""
-
-    # Format function calls without adding surrounding newlines
-    # (newlines are handled in interactive.py)
-    function_lines = []
-    for call in _function_calls:
-        function_lines.append(f"{gray('→ ' + call + ' ...')}")
-
-    # Return function calls with a single newline between content
-    # No trailing newline - that's handled in interactive.py
-    return "\n".join(function_lines)
+    return cli.get_formatted_output()
 
 
 def register_function_call(message):
@@ -51,14 +42,7 @@ def register_function_call(message):
     Returns:
         str: Empty string as we don't output immediately
     """
-    global _function_calls, _function_state_reset
-
-    if _function_state_reset:
-        _function_calls = []
-        _function_state_reset = False
-
-    _function_calls.append(message)
-    return ""  # Don't output anything now, output is handled centrally
+    return cli.register_function_call(message)
 
 
 # ANSI color codes

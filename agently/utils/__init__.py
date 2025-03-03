@@ -1,5 +1,7 @@
 """Utility modules for Agently."""
 
+# Import from cli_format for backward compatibility
+# These functions now delegate to the new centralized output system
 from .cli_format import (  # Basic color functions; Function call formatting; Plugin action formatting
     blue,
     bold,
