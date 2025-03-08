@@ -10,6 +10,7 @@ import sys
 
 class Color:
     """ANSI color codes for terminal output."""
+
     RESET = "\033[0m"
     BOLD = "\033[1m"
     ITALIC = "\033[3m"
@@ -25,6 +26,7 @@ class Color:
 
 class Style:
     """Predefined styles for different types of output."""
+
     NORMAL = {}
     ERROR = {"color": "red"}
     SUCCESS = {"color": "green"}
@@ -40,15 +42,15 @@ def should_use_colors():
     # Check if stdout is a TTY
     if not sys.stdout.isatty():
         return False
-    
+
     # Check for NO_COLOR environment variable
     if "NO_COLOR" in os.environ:
         return False
-    
+
     # Check for FORCE_COLOR environment variable
     if "FORCE_COLOR" in os.environ:
         return True
-    
+
     # Default to using colors
     return True
 
@@ -60,12 +62,12 @@ def get_color_code(color_name):
 
 def apply_style(text, style=None, **kwargs):
     """Apply a style to text.
-    
+
     Args:
         text: The text to style
         style: A predefined style name or dict of style attributes
         **kwargs: Override style attributes
-        
+
     Returns:
         Styled text
     """
@@ -76,32 +78,32 @@ def apply_style(text, style=None, **kwargs):
         base_style = style
     else:
         base_style = Style.NORMAL
-    
+
     # Override with kwargs
     final_style = {**base_style, **kwargs}
-    
+
     # Apply the style
     return format_text(text, **final_style)
 
 
 def format_text(text, color=None, bold=False, italic=False, underline=False):
     """Format text with colors and styles.
-    
+
     Args:
         text: The text to format
         color: Color name (e.g., "red", "green")
         bold: Whether to make the text bold
         italic: Whether to make the text italic
         underline: Whether to underline the text
-        
+
     Returns:
         Formatted text
     """
     if not should_use_colors():
         return str(text)
-    
+
     result = ""
-    
+
     # Apply styles
     if bold:
         result += Color.BOLD
@@ -109,12 +111,12 @@ def format_text(text, color=None, bold=False, italic=False, underline=False):
         result += Color.ITALIC
     if underline:
         result += Color.UNDERLINE
-    
+
     # Apply color
     if color:
         color_code = get_color_code(color)
         result += color_code
-    
+
     # Add text and reset
     result += str(text) + Color.RESET
-    return result 
+    return result

@@ -6,9 +6,9 @@ import logging
 import click
 
 from agently.agents.agent import Agent
+from agently.cli.output import cli, echo, info, muted
 from agently.config.types import AgentConfig
 from agently.conversation.context import ConversationContext, Message
-from agently.cli.output import cli, echo, info, muted
 
 logger = logging.getLogger(__name__)
 

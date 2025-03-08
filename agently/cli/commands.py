@@ -11,15 +11,15 @@ import yaml
 
 from agently.config.parser import load_agent_config
 from agently.plugins.sources import GitHubPluginSource, LocalPluginSource
-from agently.utils.logging import LogLevel, configure_logging
 from agently.utils.cli_format import (
-    PluginStatus, 
-    format_plugin_status, 
-    format_section_header, 
-    format_plan_summary,
+    Color,
+    PluginStatus,
     format_apply_summary,
-    Color
+    format_plan_summary,
+    format_plugin_status,
+    format_section_header,
 )
+from agently.utils.logging import LogLevel, configure_logging
 
 from .interactive import interactive_loop
 
@@ -146,17 +146,19 @@ def run(agent, log_level):
             sys.exit(1)
 
         # Display agent configuration summary
-        click.echo(f"\nThe agent {Color.BOLD}{agent_config.name}{Color.RESET} has been initialized using {Color.CYAN}{agent_config.model.provider}{Color.RESET} {Color.CYAN}{agent_config.model.model}{Color.RESET}")
+        click.echo(
+            f"\nThe agent {Color.BOLD}{agent_config.name}{Color.RESET} has been initialized using {Color.CYAN}{agent_config.model.provider}{Color.RESET} {Color.CYAN}{agent_config.model.model}{Color.RESET}"
+        )
         if agent_config.description:
             click.echo(f"{agent_config.description}")
-        
+
         # Display loaded plugins
         if agent_config.plugins:
             click.echo(f"\n{Color.BOLD}Loaded plugins:{Color.RESET}")
             for plugin_config in agent_config.plugins:
                 plugin_key = f"{plugin_config.source.namespace}/{plugin_config.source.name}"
                 click.echo(f"  • {plugin_key}")
-        
+
         click.echo("\nType a message to begin. Type exit to quit.\n")
 
         # Run interactive loop
@@ -267,27 +269,27 @@ def _initialize_plugins(config_path, quiet=False, force=False):
     # Ensure plugins section exists
     if "plugins" not in lockfile:
         lockfile["plugins"] = {}
-    
+
     # Track plugin status for reporting
     to_add = set()
     to_update = set()
     unchanged = set()
     to_remove = set()
     failed = set()
-    
+
     # Track plugin details for reporting
     plugin_details = {}
-    
+
     # Track successfully installed plugins
     installed_plugins = set()
-    
+
     # First, identify plugins to be added, updated, or removed
     # GitHub plugins
     for github_plugin_config in github_plugins:
         repo_url = github_plugin_config["source"]
         version = github_plugin_config.get("version", "main")
         plugin_path = github_plugin_config.get("plugin_path", "")
-        
+
         # Create a GitHubPluginSource to parse the namespace/name
         source = GitHubPluginSource(
             repo_url=repo_url,
@@ -295,10 +297,10 @@ def _initialize_plugins(config_path, quiet=False, force=False):
             plugin_path=plugin_path,
             force_reinstall=force,
         )
-        
+
         plugin_key = f"{source.namespace}/{source.name}"
         plugin_details[plugin_key] = f"version={version}"
-        
+
         # Check if plugin exists in lockfile
         if plugin_key in existing_plugins:
             # Check if version has changed
@@ -308,19 +310,19 @@ def _initialize_plugins(config_path, quiet=False, force=False):
                 unchanged.add(plugin_key)
         else:
             to_add.add(plugin_key)
-    
+
     # Local plugins
     for local_plugin_config in local_plugins:
         source_path = local_plugin_config["source"]
-        
+
         # Resolve relative paths
         if not os.path.isabs(source_path):
             source_path = os.path.abspath(os.path.join(os.path.dirname(config_path), source_path))
-        
+
         plugin_name = os.path.basename(source_path)
         plugin_key = f"local/{plugin_name}"
         plugin_details[plugin_key] = f"path={source_path}"
-        
+
         # Check if plugin exists in lockfile
         if plugin_key in existing_plugins:
             # For local plugins, check if SHA has changed or force is enabled
@@ -331,51 +333,51 @@ def _initialize_plugins(config_path, quiet=False, force=False):
                 unchanged.add(plugin_key)
         else:
             to_add.add(plugin_key)
-    
+
     # Identify plugins to remove (in lockfile but not in config)
     for plugin_key in existing_plugins:
         if plugin_key not in to_add and plugin_key not in to_update and plugin_key not in unchanged:
             to_remove.add(plugin_key)
-    
+
     # Print plan
     if not quiet:
         click.echo("\nAgently will perform the following actions:")
-        
+
         if to_add or to_update or to_remove:
             if to_add:
                 click.echo(f"\n{format_section_header('Plugins to add')}")
                 for plugin_key in sorted(to_add):
                     click.echo(format_plugin_status(PluginStatus.ADDED, plugin_key, plugin_details.get(plugin_key)))
-            
+
             if to_update:
                 click.echo(f"\n{format_section_header('Plugins to update')}")
                 for plugin_key in sorted(to_update):
                     click.echo(format_plugin_status(PluginStatus.UPDATED, plugin_key, plugin_details.get(plugin_key)))
-            
+
             if unchanged:
                 click.echo(f"\n{format_section_header('Plugins unchanged')}")
                 for plugin_key in sorted(unchanged):
                     click.echo(format_plugin_status(PluginStatus.UNCHANGED, plugin_key, plugin_details.get(plugin_key)))
-            
+
             if to_remove:
                 click.echo(f"\n{format_section_header('Plugins to remove')}")
                 for plugin_key in sorted(to_remove):
                     click.echo(format_plugin_status(PluginStatus.REMOVED, plugin_key))
-            
+
             click.echo(f"\n{format_plan_summary(len(to_add), len(to_update), len(unchanged), len(to_remove))}")
         else:
             click.echo("\nNo changes. Your plugin configuration is up to date.")
-        
+
         click.echo("\nApplying changes...")
-    
+
     # Now perform the actual installation
-    
+
     # Install GitHub plugins
     for github_plugin_config in github_plugins:
         repo_url = github_plugin_config["source"]
         version = github_plugin_config.get("version", "main")
         plugin_path = github_plugin_config.get("plugin_path", "")
-        
+
         # Create a GitHubPluginSource
         source = GitHubPluginSource(
             repo_url=repo_url,
@@ -383,27 +385,27 @@ def _initialize_plugins(config_path, quiet=False, force=False):
             plugin_path=plugin_path,
             force_reinstall=force,  # Pass the force flag to control reinstallation
         )
-        
+
         plugin_key = f"{source.namespace}/{source.name}"
-        
+
         # Skip if unchanged and not forced
         if plugin_key in unchanged and not force:
             installed_plugins.add(plugin_key)
             continue
-        
+
         try:
             # Load plugin
             plugin_class = source.load()
-            
+
             # Get plugin info for lockfile
             plugin_info = source._get_plugin_info(plugin_class)
-            
+
             # Add to installed plugins
             installed_plugins.add(plugin_key)
-            
+
             # Update lockfile with plugin info
             lockfile["plugins"][plugin_key] = plugin_info
-            
+
             if not quiet:
                 if plugin_key in to_add:
                     click.echo(format_plugin_status(PluginStatus.ADDED, plugin_key, f"version={version}"))
@@ -414,15 +416,15 @@ def _initialize_plugins(config_path, quiet=False, force=False):
             failed.add(plugin_key)
             if not quiet:
                 click.echo(format_plugin_status(PluginStatus.FAILED, plugin_key, str(e)))
-    
+
     # Install local plugins
     for local_plugin_config in local_plugins:
         source_path = local_plugin_config["source"]
-        
+
         # Resolve relative paths
         if not os.path.isabs(source_path):
             source_path = os.path.abspath(os.path.join(os.path.dirname(config_path), source_path))
-        
+
         # Create a LocalPluginSource with the resolved path
         local_source = LocalPluginSource(
             path=Path(source_path),
@@ -430,27 +432,27 @@ def _initialize_plugins(config_path, quiet=False, force=False):
             name=os.path.basename(source_path),  # Use directory name as plugin name
             force_reinstall=force,  # Pass the force flag to control reinstallation
         )
-        
+
         plugin_key = f"{local_source.namespace}/{local_source.name}"
-        
+
         # Skip if unchanged and not forced
         if plugin_key in unchanged and not force:
             installed_plugins.add(plugin_key)
             continue
-        
+
         try:
             # Load plugin
             plugin_class = local_source.load()
-            
+
             # Get plugin info for lockfile
             plugin_info = local_source._get_plugin_info(plugin_class)
-            
+
             # Add to installed plugins
             installed_plugins.add(plugin_key)
-            
+
             # Update lockfile with plugin info
             lockfile["plugins"][plugin_key] = plugin_info
-            
+
             if not quiet:
                 if plugin_key in to_add:
                     click.echo(format_plugin_status(PluginStatus.ADDED, plugin_key, f"path={source_path}"))
@@ -461,17 +463,17 @@ def _initialize_plugins(config_path, quiet=False, force=False):
             failed.add(plugin_key)
             if not quiet:
                 click.echo(format_plugin_status(PluginStatus.FAILED, plugin_key, str(e)))
-    
+
     # Remove plugins that are no longer in the config
     for plugin_key in to_remove:
         if not quiet:
             click.echo(format_plugin_status(PluginStatus.REMOVED, plugin_key))
         lockfile["plugins"].pop(plugin_key, None)
-    
+
     # Write updated lockfile
     with open(lockfile_path, "w") as f:
         json.dump(lockfile, f, indent=2)
-    
+
     # Print summary
     if not quiet:
         # Count actual changes
@@ -480,9 +482,9 @@ def _initialize_plugins(config_path, quiet=False, force=False):
         removed = len(to_remove)
         failed_count = len(failed)
         unchanged_count = len([p for p in unchanged if p in installed_plugins])
-        
+
         click.echo(f"\n{format_apply_summary(added, updated, unchanged_count, removed, failed_count)}")
-    
+
     return installed_plugins
 
 
@@ -513,9 +515,9 @@ def init(agent, force, quiet, log_level):
 
         if not quiet:
             click.echo(f"Initializing Agently configuration from {agent}")
-        
+
         installed_plugins = _initialize_plugins(agent, quiet=quiet, force=force)
-        
+
         if not quiet:
             click.echo("\nAgently initialization complete!")
             click.echo("To run your agent, use: agently run")

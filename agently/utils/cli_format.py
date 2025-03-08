@@ -48,6 +48,7 @@ def register_function_call(message):
 # ANSI color codes
 class Color:
     """ANSI color codes for terminal output."""
+
     RESET = "\033[0m"
     BOLD = "\033[1m"
     GREEN = "\033[32m"
@@ -60,6 +61,7 @@ class Color:
 
 class PluginStatus(Enum):
     """Status of a plugin during initialization."""
+
     ADDED = "added"
     UPDATED = "updated"
     UNCHANGED = "unchanged"
@@ -69,17 +71,17 @@ class PluginStatus(Enum):
 
 def format_plugin_status(status: PluginStatus, plugin_key: str, details: Optional[str] = None) -> str:
     """Format a plugin status message in Terraform-like style.
-    
+
     Args:
         status: The status of the plugin
         plugin_key: The plugin identifier (namespace/name)
         details: Optional details about the plugin (version, path, etc.)
-        
+
     Returns:
         Formatted status message
     """
     prefix = "  "
-    
+
     if status == PluginStatus.ADDED:
         status_str = f"{Color.GREEN}+ {plugin_key}{Color.RESET}"
     elif status == PluginStatus.UPDATED:
@@ -92,7 +94,7 @@ def format_plugin_status(status: PluginStatus, plugin_key: str, details: Optiona
         status_str = f"{Color.RED}× {plugin_key}{Color.RESET}"
     else:
         status_str = f"  {plugin_key}"
-    
+
     if details:
         return f"{prefix}{status_str} ({details})"
     else:
@@ -101,10 +103,10 @@ def format_plugin_status(status: PluginStatus, plugin_key: str, details: Optiona
 
 def format_section_header(title: str) -> str:
     """Format a section header in Terraform-like style.
-    
+
     Args:
         title: The section title
-        
+
     Returns:
         Formatted section header
     """
@@ -113,73 +115,73 @@ def format_section_header(title: str) -> str:
 
 def format_plan_summary(added: int, updated: int, unchanged: int, removed: int, failed: int = 0) -> str:
     """Format a plan summary in Terraform-like style.
-    
+
     Args:
         added: Number of plugins to be added
         updated: Number of plugins to be updated
         unchanged: Number of plugins that are unchanged
         removed: Number of plugins to be removed
         failed: Number of plugins that failed to process
-        
+
     Returns:
         Formatted plan summary
     """
     parts = []
-    
+
     if added > 0:
         parts.append(f"{Color.GREEN}+{added} to add{Color.RESET}")
-    
+
     if updated > 0:
         parts.append(f"{Color.YELLOW}~{updated} to update{Color.RESET}")
-    
+
     if unchanged > 0:
         parts.append(f"{unchanged} unchanged")
-    
+
     if removed > 0:
         parts.append(f"{Color.RED}-{removed} to remove{Color.RESET}")
-    
+
     if failed > 0:
         parts.append(f"{Color.RED}{failed} failed{Color.RESET}")
-    
+
     if not parts:
         return "No changes. Your plugin configuration is up to date."
-    
+
     return "Plan: " + ", ".join(parts)
 
 
 def format_apply_summary(added: int, updated: int, unchanged: int, removed: int, failed: int = 0) -> str:
     """Format an apply summary in Terraform-like style.
-    
+
     Args:
         added: Number of plugins added
         updated: Number of plugins updated
         unchanged: Number of plugins that were unchanged
         removed: Number of plugins removed
         failed: Number of plugins that failed to process
-        
+
     Returns:
         Formatted apply summary
     """
     parts = []
-    
+
     if added > 0:
         parts.append(f"{Color.GREEN}{added} added{Color.RESET}")
-    
+
     if updated > 0:
         parts.append(f"{Color.YELLOW}{updated} updated{Color.RESET}")
-    
+
     if unchanged > 0:
         parts.append(f"{unchanged} unchanged")
-    
+
     if removed > 0:
         parts.append(f"{Color.RED}{removed} removed{Color.RESET}")
-    
+
     if failed > 0:
         parts.append(f"{Color.RED}{failed} failed{Color.RESET}")
-    
+
     if not parts:
         return "No changes applied. Your plugin configuration is up to date."
-    
+
     return "Apply complete! Resources: " + ", ".join(parts)
 
 
