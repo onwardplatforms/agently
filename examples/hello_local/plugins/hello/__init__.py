@@ -6,7 +6,8 @@ from typing import Optional, Dict
 from semantic_kernel.functions import kernel_function
 
 from agently.plugins.base import Plugin, PluginVariable
-from agently.utils import format_action, print_agent_message, format_result, format_function_call, format_function_result
+# Import styles directly from the SDK
+from agently_sdk import styles
 
 
 class HelloPlugin(Plugin):
@@ -57,21 +58,18 @@ class HelloPlugin(Plugin):
         Returns:
             A personalized greeting message
         """
-        # Show the action being performed
-        print(format_action("saying hello"))
+        # Simple function call indicator without newline after it
+        print("\n" + styles.dim("ƒ(x) saying hello..."), end="")
+        print()  # Add blank line after indicator
 
         # Check if we have a remembered name for this conversation
         if not name and self.conversation_id and self.conversation_id in self.remembered_names:
             name = self.remembered_names[self.conversation_id]
-            result = f"Hello, {name}!"
-        # Generate the greeting
-        elif name:
-            result = f"Hello, {name}!"
-        else:
+        # Use default name if no name provided
+        elif not name:
             name = self.default_name
-            result = f"Hello, {self.default_name}!"
-
-        return result
+            
+        return f"Hello, {name}!"
 
     @kernel_function(description="Remember a user's name for future interactions in this conversation")
     def remember_name(self, name: str, conversation_id: Optional[str] = None) -> str:
@@ -84,7 +82,9 @@ class HelloPlugin(Plugin):
         Returns:
             Confirmation message
         """
-        print(format_action("remembering name"))
+        # Simple function call indicator without newline after it
+        print("\n" + styles.dim("ƒ(x) remembering name..."), end="")
+        print()  # Add blank line after indicator
 
         # Store the conversation ID
         self.conversation_id = conversation_id or self.conversation_id or "default"
@@ -92,9 +92,7 @@ class HelloPlugin(Plugin):
         # Store the name
         self.remembered_names[self.conversation_id] = name
 
-        result = f"I'll remember that your name is {name}."
-
-        return result
+        return f"I'll remember that your name is {name}."
 
     @kernel_function(description="Create a greeting based on the time of day")
     def time_greeting(self, name: Optional[str] = None) -> str:
@@ -106,7 +104,9 @@ class HelloPlugin(Plugin):
         Returns:
             A time-appropriate greeting
         """
-        print(format_action("creating time-based greeting"))
+        # Simple function call indicator without newline after it
+        print("\n" + styles.dim("ƒ(x) creating time-based greeting..."), end="")
+        print()  # Add blank line after indicator
 
         # Get current hour (0-23)
         current_hour = datetime.datetime.now().hour
@@ -124,11 +124,8 @@ class HelloPlugin(Plugin):
             name = self.remembered_names[self.conversation_id]
         elif not name:
             name = self.default_name
-
-        # Create greeting
-        result = f"{time_greeting}, {name}!"
-
-        return result
+            
+        return f"{time_greeting}, {name}!"
 
     @kernel_function(description="Generate a farewell message")
     def farewell(self, name: Optional[str] = None) -> str:
@@ -140,15 +137,30 @@ class HelloPlugin(Plugin):
         Returns:
             A farewell message
         """
-        print(format_action("saying goodbye"))
+        # Simple function call indicator without newline after it
+        print("\n" + styles.dim("ƒ(x) saying goodbye..."), end="")
+        print()  # Add blank line after indicator
 
         # Check for remembered name
         if not name and self.conversation_id and self.conversation_id in self.remembered_names:
             name = self.remembered_names[self.conversation_id]
         elif not name:
             name = self.default_name
+            
+        return f"Goodbye, {name}! Have a wonderful day."
 
-        # Create farewell
-        result = f"Goodbye, {name}! Have a wonderful day."
 
-        return result
+# Simple test function that can be run directly
+if __name__ == "__main__":
+    plugin = HelloPlugin()
+    print("\nTesting greet directly:")
+    result = plugin.greet("Test User")
+    print("<Result>", result, "</Result>")
+    
+    print("\nTesting time_greeting directly:")
+    result = plugin.time_greeting("Test User")
+    print("<Result>", result, "</Result>")
+    
+    print("\nTesting farewell directly:")
+    result = plugin.farewell("Test User")
+    print("<Result>", result, "</Result>")

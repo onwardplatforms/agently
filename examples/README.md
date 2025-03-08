@@ -4,26 +4,18 @@ This directory contains examples for using the Agent Foundry runtime.
 
 ## Directory Structure
 
-- **hello_world/** - A simple example demonstrating the YAML-based agent configuration with plugin variables
+- **hello_local/** - A simple example demonstrating the YAML-based agent configuration with local plugins
   - `agently.yaml` - The agent configuration file
-  - `plugins/hello/__init__.py` - A simple plugin that demonstrates plugin variables
-  - `test_plugin.py` - A test script for verifying plugin functionality
+  - `plugins/hello/__init__.py` - A simple plugin that demonstrates plugin functionality
+- **hello_remote/** - An example demonstrating the use of remote plugins from GitHub
 
 ## Running Examples
 
-To run the hello_world example:
+To run the hello_local example:
 
 ```bash
 # From the root directory
-cd examples/hello_world
-python -m cli.commands run --agent agently.yaml
-```
-
-Or simply:
-
-```bash
-# From the root directory
-cd examples/hello_world
+cd examples/hello_local
 agently run
 ```
 

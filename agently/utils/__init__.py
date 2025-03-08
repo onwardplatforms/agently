@@ -1,20 +1,5 @@
-"""Utility modules for Agently."""
+"""Utility functions for Agently."""
 
-from .cli_format import (  # Basic color functions; Function call formatting; Plugin action formatting
-    blue,
-    bold,
-    cyan,
-    format_action,
-    format_file_header,
-    format_function_call,
-    format_function_result,
-    format_result,
-    get_formatted_output,
-    gray,
-    green,
-    magenta,
-    print_agent_message,
-    red,
-    reset_function_state,
-    yellow,
-)
+# The utils module is intentionally kept minimal.
+# Import styles directly from the SDK where needed:
+# from agently_sdk import styles

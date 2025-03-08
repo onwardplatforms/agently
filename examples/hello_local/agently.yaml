@@ -12,5 +12,10 @@ plugins:
     - source: "./plugins/hello"
       variables:
         default_name: "Friend"
+  # github:
+  #   - source: "onwardplatforms/hello"
+  #     version: "main"
+  #     variables:
+  #       default_name: "Remote Friend"
 # env:
 #   OPENAI_API_KEY: ${{ env.OPENAI_API_KEY }}
