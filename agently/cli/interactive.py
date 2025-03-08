@@ -4,9 +4,9 @@ import asyncio
 import logging
 
 import click
+from agently_sdk import styles  # Import styles directly from SDK
 
 from agently.agents.agent import Agent
-from agently_sdk import styles  # Import styles directly from SDK
 from agently.config.types import AgentConfig
 from agently.conversation.context import ConversationContext, Message
 
@@ -16,52 +16,53 @@ logger = logging.getLogger(__name__)
 # Create a simplified output manager for interactive mode
 class OutputManager:
     """Minimal output manager for CLI interaction."""
-    
+
     def __init__(self):
         """Initialize the output manager."""
         self.context_stack = []
         self.last_output_type = None
-    
+
     def echo(self, message, nl=True):
         """Echo a message."""
         click.echo(message, nl=nl)
-    
+
     def info(self, message, nl=True):
         """Show an info message."""
         click.echo(styles.info(message), nl=nl)
-    
+
     def muted(self, message, nl=True):
         """Show a muted message."""
         click.echo(styles.dim(message), nl=nl)
-    
+
     def stream(self, chunk: str):
         """Stream a chunk of text to the output."""
         if chunk:
             click.echo(chunk, nl=False)
-    
+
     # Context manager-related methods
     def enter_context(self, context_name):
         """Enter a named context."""
         self.context_stack.append(context_name)
         return self
-    
+
     def exit_context(self):
         """Exit the current context."""
         if self.context_stack:
             self.context_stack.pop()
-    
+
     def reset_function_state(self):
         """Reset function call tracking state."""
         self.last_output_type = None
-    
+
     # Context manager protocol
     def __enter__(self):
         """Enter the context manager."""
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Exit the context manager."""
         self.exit_context()
+
 
 # Create a singleton instance
 cli = OutputManager()
@@ -92,9 +93,9 @@ async def _run_interactive_loop(agent_config: AgentConfig):
         # Welcome message with minimal but informative details
         cli.echo(f"\nThe agent {agent_config.name} has been initialized using {provider} {model_name}")
         if agent_config.description:
-            cli.echo(f"{agent_config.description}")
+            cli.echo(agent_config.description)
 
-        cli.muted(f"\nType a message to begin. Type exit to quit.\n")
+        cli.muted("\nType a message to begin. Type exit to quit.\n")
 
         # Main loop
         while True:

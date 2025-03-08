@@ -41,28 +41,27 @@ class PluginSource(ABC):
             ImportError: If the plugin cannot be imported
             ValueError: If the plugin is invalid
         """
-        
+
     @abstractmethod
     def _get_current_sha(self) -> str:
         """Get the current SHA for this plugin source.
-        
+
         Returns:
             A string representation of the current SHA, or empty string if unavailable
         """
-        pass
-        
+
     def needs_update(self, lockfile_sha: str) -> bool:
         """Check if the plugin needs to be updated based on SHA.
-        
+
         Args:
             lockfile_sha: SHA from the lockfile
-            
+
         Returns:
             True if the plugin needs updating, False otherwise
         """
         # Get current SHA using subclass-specific implementation
         current_sha = self._get_current_sha()
-        
+
         # If current SHA is empty, it could mean:
         # 1. The plugin directory doesn't exist
         # 2. We couldn't calculate a SHA for some reason
@@ -70,11 +69,11 @@ class PluginSource(ABC):
             # If there's a SHA in the lockfile, but we can't get a current SHA,
             # we should update (may need reinstallation)
             return bool(lockfile_sha)
-            
+
         # If lockfile SHA is empty, we should update
         if not lockfile_sha:
             return True
-            
+
         # Compare SHAs - if different, we need to update
         return current_sha != lockfile_sha
 
@@ -90,7 +89,7 @@ class LocalPluginSource(PluginSource):
 
     def _get_current_sha(self) -> str:
         """Get the current SHA for this plugin source.
-        
+
         Returns:
             SHA calculated from the plugin files
         """
@@ -420,17 +419,17 @@ class GitHubPluginSource(PluginSource):
 
     def _get_current_sha(self) -> str:
         """Get the current SHA for this plugin source.
-        
+
         Returns:
             SHA from the git repository, or empty string if unavailable
         """
         # Determine the plugin directory name
         plugin_dir = self.cache_dir / self.name
-        
+
         # If directory doesn't exist, we can't get a SHA
         if not plugin_dir.exists():
             return ""
-        
+
         # Get SHA from the repository
         return self._get_repo_sha(plugin_dir)
 

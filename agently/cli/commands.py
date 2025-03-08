@@ -6,14 +6,14 @@ import os
 import sys
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Dict, List, Set, Tuple
+from typing import Optional
 
 import click
 import yaml
+from agently_sdk import styles  # Import styles directly from SDK
 
 from agently.config.parser import load_agent_config
 from agently.plugins.sources import GitHubPluginSource, LocalPluginSource
-from agently_sdk import styles  # Import styles directly from SDK
 from agently.utils.logging import LogLevel, configure_logging
 
 from .interactive import interactive_loop
@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 # Define plugin status enum directly here
 class PluginStatus(Enum):
     """Status of a plugin during initialization."""
+
     ADDED = "added"
     UPDATED = "updated"
     UNCHANGED = "unchanged"
@@ -64,12 +65,12 @@ def format_section_header(title: str) -> str:
 def format_plan_summary(added: int, updated: int, unchanged: int, removed: int, failed: int = 0) -> str:
     """Format a plugin status summary."""
     total = added + updated + unchanged + removed
-    
+
     if added == 0 and updated == 0 and removed == 0 and failed == 0 and unchanged > 0:
         return f"All plugins ({unchanged}) are ready and up-to-date"
-    
+
     parts = []
-    
+
     if added > 0:
         parts.append(styles.green(f"+{added} new"))
     if updated > 0:
@@ -80,20 +81,20 @@ def format_plan_summary(added: int, updated: int, unchanged: int, removed: int, 
         parts.append(styles.red(f"-{removed} removed"))
     if failed > 0:
         parts.append(styles.red(f"✗{failed} failed"))
-    
+
     return f"Found {total} plugins: " + ", ".join(parts)
 
 
 def format_apply_summary(added: int, updated: int, unchanged: int, removed: int, failed: int = 0) -> str:
     """Format a validation result summary."""
     total = added + updated + unchanged + removed
-    
+
     # Special case for all plugins up-to-date
     if added == 0 and updated == 0 and removed == 0 and failed == 0 and unchanged > 0:
         return f"All plugins ({unchanged}) are ready and up-to-date"
-    
+
     parts = []
-    
+
     if added > 0:
         parts.append(styles.green(f"{added} added"))
     if updated > 0:
@@ -104,7 +105,7 @@ def format_apply_summary(added: int, updated: int, unchanged: int, removed: int,
         parts.append(styles.red(f"{removed} removed"))
     if failed > 0:
         parts.append(styles.red(f"{failed} failed"))
-    
+
     return f"Validation complete: {total} plugins processed" + (", " + ", ".join(parts) if parts else "")
 
 
@@ -334,7 +335,7 @@ def _initialize_plugins(config_path, quiet=False, force=False):
             if not quiet:
                 click.echo("Creating new lockfile")
             lockfile = {"plugins": {}}
-    except Exception as e:
+    except Exception:
         # Failed to read lockfile, create a new one
         lockfile = {"plugins": {}}
 
@@ -398,7 +399,7 @@ def _initialize_plugins(config_path, quiet=False, force=False):
         # Use the same naming approach as during detection
         plugin_name = os.path.basename(source_path)
         local_source = LocalPluginSource(
-            path=str(abs_source_path),
+            path=Path(abs_source_path),
             namespace="local",
             name=plugin_name,
             force_reinstall=force,  # Pass the force flag to control reinstallation
@@ -444,7 +445,7 @@ def _initialize_plugins(config_path, quiet=False, force=False):
                     status = PluginStatus.UNCHANGED
                 elif plugin_key in to_remove:
                     status = PluginStatus.REMOVED
-                
+
                 if status:
                     click.echo(format_plugin_status(status, plugin_key, plugin_details.get(plugin_key)))
 
@@ -503,7 +504,7 @@ def _initialize_plugins(config_path, quiet=False, force=False):
         # Use the same naming approach as during detection
         plugin_name = os.path.basename(source_path)
         local_source = LocalPluginSource(
-            path=str(abs_source_path),
+            path=Path(abs_source_path),
             namespace="local",
             name=plugin_name,
             force_reinstall=force,  # Pass the force flag to control reinstallation
@@ -587,12 +588,11 @@ def init(agent, force, quiet, log_level):
         if not quiet:
             click.echo(f"Reading configuration from {agent}")
 
-        installed_plugins = _initialize_plugins(agent, quiet=quiet, force=force)
+        _initialize_plugins(agent, quiet=quiet, force=force)
 
         if not quiet:
             click.echo("\nValidation complete!")
             click.echo("\nAgently is ready to run")
-            click.echo("To start your agent, use: agently run")
     except Exception as e:
         click.echo(f"Error: {e}")
         logger.exception(f"Error initializing plugins: {e}")
