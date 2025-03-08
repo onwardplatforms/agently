@@ -6,11 +6,65 @@ import logging
 import click
 
 from agently.agents.agent import Agent
-from agently.cli.output import cli, echo, info, muted
+from agently_sdk import styles  # Import styles directly from SDK
 from agently.config.types import AgentConfig
 from agently.conversation.context import ConversationContext, Message
 
 logger = logging.getLogger(__name__)
+
+
+# Create a simplified output manager for interactive mode
+class OutputManager:
+    """Minimal output manager for CLI interaction."""
+    
+    def __init__(self):
+        """Initialize the output manager."""
+        self.context_stack = []
+        self.last_output_type = None
+    
+    def echo(self, message, nl=True):
+        """Echo a message."""
+        click.echo(message, nl=nl)
+    
+    def info(self, message, nl=True):
+        """Show an info message."""
+        click.echo(styles.info(message), nl=nl)
+    
+    def muted(self, message, nl=True):
+        """Show a muted message."""
+        click.echo(styles.dim(message), nl=nl)
+    
+    def stream(self, chunk: str):
+        """Stream a chunk of text to the output."""
+        if chunk:
+            click.echo(chunk, nl=False)
+    
+    # Context manager-related methods
+    def enter_context(self, context_name):
+        """Enter a named context."""
+        self.context_stack.append(context_name)
+        return self
+    
+    def exit_context(self):
+        """Exit the current context."""
+        if self.context_stack:
+            self.context_stack.pop()
+    
+    def reset_function_state(self):
+        """Reset function call tracking state."""
+        self.last_output_type = None
+    
+    # Context manager protocol
+    def __enter__(self):
+        """Enter the context manager."""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Exit the context manager."""
+        self.exit_context()
+
+# Create a singleton instance
+cli = OutputManager()
 
 
 async def _run_interactive_loop(agent_config: AgentConfig):
@@ -36,11 +90,11 @@ async def _run_interactive_loop(agent_config: AgentConfig):
     # Enter interactive context for proper streaming
     with cli.enter_context("interactive"):
         # Welcome message with minimal but informative details
-        echo(f"\nThe agent {agent_config.name} has been initialized using {provider} {model_name}")
+        cli.echo(f"\nThe agent {agent_config.name} has been initialized using {provider} {model_name}")
         if agent_config.description:
-            echo(f"{agent_config.description}")
+            cli.echo(f"{agent_config.description}")
 
-        muted(f"\nType a message to begin. Type exit to quit.\n")
+        cli.muted(f"\nType a message to begin. Type exit to quit.\n")
 
         # Main loop
         while True:
@@ -62,7 +116,7 @@ async def _run_interactive_loop(agent_config: AgentConfig):
                 cli.reset_function_state()
 
                 # Display the prompt with newline before but not after
-                echo("\nAssistant> ", nl=False)
+                cli.echo("\nAssistant> ", nl=False)
 
                 # For storing response chunks for history
                 response_chunks = []
@@ -75,18 +129,18 @@ async def _run_interactive_loop(agent_config: AgentConfig):
                         cli.stream(chunk)
 
                 # Add a newline after the response
-                echo("")
+                cli.echo("")
 
                 response_text = "".join(response_chunks)
                 logger.debug(f"Agent response complete: {len(response_text)} chars")
 
             except KeyboardInterrupt:
                 logger.info("User interrupted with Ctrl+C")
-                echo("\nExiting...")
+                cli.echo("\nExiting...")
                 break
             except Exception as e:
                 logger.exception(f"Error in interactive loop: {e}")
-                echo(f"\nError: {e}")
+                cli.echo(f"\nError: {e}")
 
 
 def interactive_loop(agent_config: AgentConfig):
@@ -101,7 +155,7 @@ def interactive_loop(agent_config: AgentConfig):
         logger.info("Interactive loop completed")
     except KeyboardInterrupt:
         logger.info("Interactive loop interrupted")
-        echo("\nExiting...")
+        cli.echo("\nExiting...")
     except Exception as e:
         logger.exception(f"Error in interactive loop: {e}")
-        echo(f"\nError: {e}")
+        cli.echo(f"\nError: {e}")

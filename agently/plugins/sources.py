@@ -41,6 +41,42 @@ class PluginSource(ABC):
             ImportError: If the plugin cannot be imported
             ValueError: If the plugin is invalid
         """
+        
+    @abstractmethod
+    def _get_current_sha(self) -> str:
+        """Get the current SHA for this plugin source.
+        
+        Returns:
+            A string representation of the current SHA, or empty string if unavailable
+        """
+        pass
+        
+    def needs_update(self, lockfile_sha: str) -> bool:
+        """Check if the plugin needs to be updated based on SHA.
+        
+        Args:
+            lockfile_sha: SHA from the lockfile
+            
+        Returns:
+            True if the plugin needs updating, False otherwise
+        """
+        # Get current SHA using subclass-specific implementation
+        current_sha = self._get_current_sha()
+        
+        # If current SHA is empty, it could mean:
+        # 1. The plugin directory doesn't exist
+        # 2. We couldn't calculate a SHA for some reason
+        if not current_sha:
+            # If there's a SHA in the lockfile, but we can't get a current SHA,
+            # we should update (may need reinstallation)
+            return bool(lockfile_sha)
+            
+        # If lockfile SHA is empty, we should update
+        if not lockfile_sha:
+            return True
+            
+        # Compare SHAs - if different, we need to update
+        return current_sha != lockfile_sha
 
 
 @dataclass
@@ -51,6 +87,14 @@ class LocalPluginSource(PluginSource):
     namespace: str = "local"  # Default namespace for local plugins
     name: str = ""  # Optional name override, defaults to directory name
     force_reinstall: bool = False  # Whether to force reinstallation
+
+    def _get_current_sha(self) -> str:
+        """Get the current SHA for this plugin source.
+        
+        Returns:
+            SHA calculated from the plugin files
+        """
+        return self._calculate_plugin_sha()
 
     def load(self) -> Type[Plugin]:
         """Load a plugin from a local path.
@@ -267,7 +311,7 @@ class LocalPluginSource(PluginSource):
             "version": "local",  # Local plugins don't have versions
             "source_type": "local",
             "source_path": str(self.path),
-            "sha": plugin_sha,  # Use consistent field name with GitHub plugins
+            "sha256": plugin_sha,  # Store SHA for change detection
             "installed_at": current_time,  # Use ISO format timestamp for consistency
         }
 
@@ -373,6 +417,22 @@ class GitHubPluginSource(PluginSource):
         """Get the path to the lockfile for this plugin."""
         # Return the lockfile path at the same level as the .agently folder
         return Path.cwd() / "agently.lockfile.json"
+
+    def _get_current_sha(self) -> str:
+        """Get the current SHA for this plugin source.
+        
+        Returns:
+            SHA from the git repository, or empty string if unavailable
+        """
+        # Determine the plugin directory name
+        plugin_dir = self.cache_dir / self.name
+        
+        # If directory doesn't exist, we can't get a SHA
+        if not plugin_dir.exists():
+            return ""
+        
+        # Get SHA from the repository
+        return self._get_repo_sha(plugin_dir)
 
     def _get_plugin_info(self, plugin_class: Type[Plugin]) -> Dict[str, Any]:
         """Get information about the plugin for the lockfile.
