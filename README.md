@@ -6,7 +6,7 @@ Agently is a Python framework for building, configuring, and running AI agents i
 
 - **Declarative Configurations**: Define agents with YAML files
 - **Plugin System**: Extend agent capabilities with plugins
-- **Environment Variable Integration**: Securely handle API keys and configuration
+- ****Environment** Variable Integration**: Securely handle API keys and configuration
 - **Multiple Model Providers**: Support for OpenAI, Ollama, and more
 - **Flexible Execution**: CLI, Python API, or interactive mode
 
@@ -148,7 +148,6 @@ For full documentation, visit [docs.agently.run](https://docs.agently.run).
 
 Check out the [examples](examples/) directory for complete working examples:
 
-- [Hello World](examples/hello_world/): A simple agent with plugin variables
 - [Multi-Plugin Agent](examples/README.md): An agent using multiple plugin sources
 
 ## Development
