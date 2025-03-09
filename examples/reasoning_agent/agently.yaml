@@ -1,0 +1,20 @@
+version: "1"
+name: "Reasoning Agent"
+description: "An agent that demonstrates continuous reasoning capabilities"
+system_prompt: >
+  You are a helpful assistant that solves problems step by step.
+  Break down complex tasks into smaller parts and explain your thought process.
+  Use available tools when needed, and justify why you're using them.
+model:
+  provider: "openai"
+  model: "gpt-4o"
+  temperature: 0.3
+  max_tokens: 4000
+continuous_reasoning: true
+plugins:
+  local:
+    - source: "../hello_local/plugins/hello"
+      variables:
+        default_name: "Friend"
+env:
+  OPENAI_API_KEY: ${{ env.OPENAI_API_KEY }} 

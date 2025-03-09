@@ -19,6 +19,8 @@ from agently.conversation.context import ConversationContext, Message
 from agently.core import get_error_handler
 from agently.errors import AgentError, ErrorContext, RetryConfig, RetryHandler
 from agently.models.base import ModelProvider
+from agently.agents.reasoning import ReasoningChain
+from agently.agents.prompts import DEFAULT_PROMPT, CONTINUOUS_REASONING_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -186,17 +188,27 @@ class Agent:
                 recovery_hint="Check plugin configuration",
             ) from e
 
-    async def _build_prompt_context(self, message: Message) -> str:
-        """Build the prompt context including plugin instructions.
+    async def _build_prompt_context(self, message: Message = None) -> str:
+        """Build the prompt context for the agent.
 
         Args:
-            message: The current message being processed
+            message: The message to build context for (optional)
 
         Returns:
-            The complete prompt context
+            The prompt context string
         """
-        # Start with system prompt
-        context = self.config.system_prompt
+        # Start with the system prompt from configuration
+        system_prompt = getattr(self.config, "system_prompt", "")
+        
+        # Determine if we should use continuous reasoning mode
+        use_continuous_reasoning = getattr(self.config, "continuous_reasoning", False)
+        
+        # Select the appropriate prompt template
+        if use_continuous_reasoning:
+            context = CONTINUOUS_REASONING_PROMPT.format(system_prompt=system_prompt)
+        else:
+            context = DEFAULT_PROMPT.format(system_prompt=system_prompt)
+            
         logger.debug("Building prompt context starting with system prompt")
 
         # Add plugin instructions if we have plugins
@@ -399,3 +411,349 @@ class Agent:
                 recovery_hint="Try rephrasing your message or check agent status",
             )
             yield f"Error: {str(error)} - {error.recovery_hint}"
+
+    async def process_continuous_reasoning(
+        self, message: Message, context: ConversationContext
+    ) -> AsyncGenerator[str, None]:
+        """Process a message with continuous reasoning.
+        
+        This method allows the agent to "think out loud", showing its reasoning
+        process between tool calls and providing a window into its decision-making.
+
+        Args:
+            message: The message to process
+            context: The conversation context
+
+        Yields:
+            Text chunks of the agent's reasoning, tool calls, and final response
+        """
+        # Initialize operation_context to None before the try block
+        operation_context = None
+        
+        # Create a reasoning chain to track the agent's thought process
+        reasoning_chain = ReasoningChain()
+
+        try:
+            # Create operation context with the correct context.id
+            operation_context = await self._handle_agent_operation(
+                "process_continuous_reasoning", message_type=message.role, context_id=context.id
+            )
+            logger.debug("Processing message with continuous reasoning: %s", operation_context)
+
+            if not self.provider:
+                raise RuntimeError("Agent not initialized")
+
+            # Add message to context
+            await context.add_message(message)
+            logger.debug("Added message to context")
+
+            # Build prompt context with plugins and continuous reasoning instructions
+            prompt_context = await self._build_prompt_context(message)
+            logger.debug(f"Built prompt context: {prompt_context[:100]}...")
+
+            # Get chat history from context
+            history = context.get_history()
+            logger.debug(f"Chat history has {len(history.messages)} messages")
+
+            # Add system prompt if not already present
+            if not any(msg.role == "system" for msg in history.messages):
+                history.add_system_message(prompt_context)
+                logger.debug("Added system prompt to history")
+
+            async def _process():
+                try:
+                    # Create settings for function calling
+                    from semantic_kernel.connectors.ai.function_choice_behavior import (
+                        FunctionChoiceBehavior,
+                    )
+                    from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings import (
+                        open_ai_prompt_execution_settings as openai_settings,
+                    )
+
+                    logger.debug("Creating OpenAI chat settings")
+                    settings = openai_settings.OpenAIChatPromptExecutionSettings(
+                        temperature=self.config.model.temperature,
+                        max_tokens=self.config.model.max_tokens or 4000,  # Ensure we have room for extended reasoning
+                        top_p=self.config.model.top_p,
+                        frequency_penalty=self.config.model.frequency_penalty,
+                        presence_penalty=self.config.model.presence_penalty,
+                        function_choice_behavior=FunctionChoiceBehavior.Auto(),
+                    )
+                    logger.debug(f"Created settings: {settings}")
+
+                    # Create arguments for the chat function
+                    from semantic_kernel.functions import KernelArguments
+
+                    arguments = KernelArguments(
+                        chat_history=history,
+                        user_input=message.content,
+                        settings=settings,
+                    )
+                    logger.debug(f"Created kernel arguments with user input: {message.content[:50]}...")
+
+                    # Variables to track the current state
+                    current_thinking = ""
+                    in_thinking_block = False
+                    in_answer_block = False
+                    final_answer = ""
+                    assistant_response = ""
+
+                    logger.info("Invoking kernel with ChatBot.Chat function")
+                    try:
+                        async for result in self.kernel.invoke_stream(
+                            plugin_name="ChatBot",
+                            function_name="Chat",
+                            arguments=arguments,
+                            return_function_results=True,
+                        ):
+                            logger.debug(f"Received result type: {type(result)}")
+                            if isinstance(result, list) and len(result) > 0:
+                                msg = result[0]
+                                logger.debug(f"Result item type: {type(msg)}, role: {getattr(msg, 'role', 'unknown')}")
+
+                                if isinstance(msg, StreamingChatMessageContent):
+                                    if msg.role == AuthorRole.ASSISTANT:
+                                        # Process the chunk content
+                                        chunk_text = str(msg)
+                                        assistant_response += chunk_text
+                                        
+                                        # Check for thinking/answer tags
+                                        if "<thinking>" in chunk_text:
+                                            in_thinking_block = True
+                                            # Extract just the content after the tag
+                                            chunk_text = chunk_text.split("<thinking>", 1)[1]
+                                            
+                                        if "</thinking>" in chunk_text and in_thinking_block:
+                                            # Extract just the content before the closing tag
+                                            parts = chunk_text.split("</thinking>", 1)
+                                            current_thinking += parts[0]
+                                            in_thinking_block = False
+                                            
+                                            # Add the completed thinking to the reasoning chain
+                                            reasoning_chain.add_reasoning(current_thinking)
+                                            current_thinking = ""
+                                            
+                                            # Yield the thinking as it is completed
+                                            yield f"Thinking: {current_thinking}\n"
+                                            
+                                            # Set the remainder for further processing
+                                            if len(parts) > 1:
+                                                chunk_text = parts[1]
+                                            else:
+                                                chunk_text = ""
+                                            
+                                        if "<answer>" in chunk_text:
+                                            in_answer_block = True
+                                            # Extract just the content after the tag
+                                            chunk_text = chunk_text.split("<answer>", 1)[1]
+                                            
+                                        if "</answer>" in chunk_text and in_answer_block:
+                                            # Extract just the content before the closing tag
+                                            parts = chunk_text.split("</answer>", 1)
+                                            final_answer += parts[0]
+                                            in_answer_block = False
+                                            
+                                            # Add the completed answer to the reasoning chain
+                                            reasoning_chain.add_response(final_answer)
+                                            
+                                            # Yield the final answer
+                                            yield f"Answer: {final_answer}\n"
+                                            
+                                            # Set the remainder for further processing
+                                            if len(parts) > 1:
+                                                chunk_text = parts[1]
+                                            else:
+                                                chunk_text = ""
+                                            
+                                        # Add to current block based on state
+                                        if in_thinking_block:
+                                            current_thinking += chunk_text
+                                            # We don't yield thinking chunks until the block is complete
+                                        elif in_answer_block:
+                                            final_answer += chunk_text
+                                            # We don't yield answer chunks until the block is complete
+                                        else:
+                                            # This is regular text outside blocks, yield it
+                                            yield chunk_text
+                                        
+                                    elif msg.role == AuthorRole.TOOL:
+                                        # This is a tool/function message - process it
+                                        logger.debug(f"Tool message received: {msg}")
+                                        # Tool processing will be handled below
+                                        # We don't yield tool messages directly
+                                    else:
+                                        logger.debug(f"Other message type with role {msg.role}: {msg}")
+                    except ContentAdditionException as e:
+                        # Handle the ContentAdditionException gracefully
+                        logger.warning(
+                            f"ContentAdditionException occurred: {e}. This is expected when mixing message roles."
+                        )
+                        # Log more details about the exception
+                        logger.warning(f"Exception details: {str(e)}")
+                        logger.warning(f"Exception type: {type(e).__name__}")
+                        # We've already yielded text chunks, so we can continue
+                    except Exception as e:
+                        logger.error(f"Error during streaming: {e}", exc_info=e)
+                        yield f"\n\nError during streaming: {str(e)}"
+
+                    # Process tool messages if any
+                    tool_messages = self._extract_tool_messages(result)
+                    if tool_messages:
+                        logger.debug(f"Processing {len(tool_messages)} tool messages")
+                        try:
+                            # Process each tool call
+                            for tool_message in tool_messages:
+                                # Extract tool name and input
+                                tool_name = tool_message.get("name", "unknown_tool")
+                                tool_input = tool_message.get("arguments", {})
+                                
+                                # Execute the tool and get result
+                                tool_result = await self._execute_tool(tool_name, tool_input)
+                                
+                                # Add to reasoning chain
+                                reasoning_chain.add_tool_call(tool_name, tool_input, tool_result)
+                                
+                                # Yield the tool call information
+                                yield f"Tool call: {tool_name}\nInput: {tool_input}\nResult: {tool_result}\n"
+                                
+                        except Exception as e:
+                            logger.error(f"Error processing tool messages: {e}", exc_info=e)
+                            yield f"\n\nError processing tool calls: {str(e)}"
+
+                    # Add complete response to history
+                    # We'll use the final answer if available, otherwise the full assistant response
+                    if final_answer:
+                        complete_response = final_answer
+                    else:
+                        complete_response = assistant_response
+                    
+                    if complete_response:
+                        logger.debug(f"Adding assistant response to history: {complete_response[:50]}...")
+                        await context.add_message(Message(content=complete_response, role="assistant"))
+                
+                except Exception as e:
+                    logger.error("Error executing chat function", exc_info=e)
+                    yield f"\n\nError executing chat function: {str(e)}"
+
+            # Use the retry handler with the process function
+            async for chunk in self.retry_handler.retry_generator(_process, operation_context):
+                yield chunk
+
+        except Exception as e:
+            # Ensure we have a default operation_context if we failed before creating one
+            if operation_context is None:
+                operation_context = ErrorContext(
+                    component="agent",
+                    operation="process_continuous_reasoning",
+                    details={
+                        "agent_id": self.id,
+                        "message_type": getattr(message, "role", "unknown"),
+                        "error": str(e),
+                    },
+                )
+
+            logger.error("Error processing message with continuous reasoning", 
+                         extra={"error": str(e)}, exc_info=e)
+
+            if isinstance(e, AgentError):
+                raise
+
+            error = self._create_agent_error(
+                message="Error processing message with continuous reasoning",
+                context=operation_context,
+                cause=e,
+                recovery_hint="Try rephrasing your message or check agent status",
+            )
+    
+    def _extract_tool_messages(self, result: Any) -> List[Dict[str, Any]]:
+        """Extract tool messages from the result.
+        
+        This is a helper method to extract tool calls from the model response.
+        
+        Args:
+            result: The result from the model
+            
+        Returns:
+            A list of tool message dictionaries
+        """
+        tool_messages = []
+        
+        # Check if the result is a list of messages
+        if isinstance(result, list):
+            for item in result:
+                # Look for tool calls in message content
+                if hasattr(item, "role") and getattr(item, "role") == "tool":
+                    # Try to extract function name and arguments
+                    if hasattr(item, "name"):
+                        tool_name = getattr(item, "name", "unknown_tool")
+                        tool_args = getattr(item, "arguments", {})
+                        tool_messages.append({
+                            "name": tool_name,
+                            "arguments": tool_args
+                        })
+                    # Also check inside items if there's a nested structure
+                    if hasattr(item, "items"):
+                        for sub_item in getattr(item, "items", []):
+                            if hasattr(sub_item, "function_name"):
+                                tool_name = getattr(sub_item, "function_name", "unknown_tool")
+                                tool_args = getattr(sub_item, "function_parameters", {})
+                                tool_messages.append({
+                                    "name": tool_name,
+                                    "arguments": tool_args
+                                })
+        
+        return tool_messages
+        
+    async def _execute_tool(self, tool_name: str, tool_input: Dict[str, Any]) -> Any:
+        """Execute a tool and get the result.
+        
+        Args:
+            tool_name: The name of the tool to execute
+            tool_input: The input parameters for the tool
+            
+        Returns:
+            The result of the tool execution
+        """
+        if not self.plugin_manager:
+            logger.warning("No plugin manager available, cannot execute tools")
+            return f"Error: No plugin manager available to execute {tool_name}"
+            
+        try:
+            # Try to find the tool in the plugin manager
+            tool_parts = tool_name.split(".")
+            if len(tool_parts) > 1:
+                # Format: plugin_name.function_name
+                plugin_name = tool_parts[0]
+                function_name = tool_parts[1]
+            else:
+                # Just a function name, try to find it in any plugin
+                plugin_name = None
+                function_name = tool_name
+                
+            # Execute the function through the plugin manager
+            if plugin_name:
+                # Try to get the result using the specific plugin
+                logger.debug(f"Executing tool {function_name} in plugin {plugin_name}")
+                result = await self.plugin_manager.execute_plugin_function(
+                    plugin_name, 
+                    function_name,
+                    **tool_input
+                )
+                return result
+            else:
+                # Try to find the function in any plugin
+                logger.debug(f"Searching for tool {function_name} in all plugins")
+                for plugin_class, plugin_instance in self.plugin_manager.plugins.values():
+                    if hasattr(plugin_instance, function_name):
+                        logger.debug(f"Found tool {function_name} in plugin {plugin_instance.name}")
+                        func = getattr(plugin_instance, function_name)
+                        result = await func(**tool_input)
+                        return result
+                    
+                # If we get here, we didn't find the function
+                logger.warning(f"Tool {function_name} not found in any plugin")
+                return f"Error: Tool {function_name} not found"
+                
+        except Exception as e:
+            logger.exception(f"Error executing tool {tool_name}: {e}")
+            return f"Error executing tool {tool_name}: {str(e)}"

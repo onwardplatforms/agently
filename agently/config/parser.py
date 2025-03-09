@@ -185,6 +185,9 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
 
     # Set log level
     log_level = LogLevel.NONE  # Default
+    
+    # Check for continuous reasoning flag
+    continuous_reasoning = yaml_config.get("continuous_reasoning", False)
 
     # Create agent config
     return AgentConfig(
@@ -195,4 +198,5 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
         model=model_config,
         plugins=plugin_configs,
         log_level=log_level,
+        continuous_reasoning=continuous_reasoning,
     )
