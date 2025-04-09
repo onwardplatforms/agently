@@ -1,0 +1,14 @@
+{
+  "plugins": {
+    "local/coder": {
+      "namespace": "local",
+      "name": "coder",
+      "full_name": "coder",
+      "version": "local",
+      "source_type": "local",
+      "source_path": "plugins/coder",
+      "sha256": "7c86282ee6ef1a3ffe467fdec32c77834a723e1846ce98fc148143d907878797",
+      "installed_at": "2025-03-09T03:57:06.002707"
+    }
+  }
+}

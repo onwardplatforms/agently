@@ -60,6 +60,7 @@ class AgentConfig:
     plugins: List[PluginConfig] = field(default_factory=list)
     capabilities: List[CapabilityConfig] = field(default_factory=list)
     log_level: int = LogLevel.NONE  # Default to no logging
+    continuous_reasoning: bool = False  # Enable/disable continuous reasoning mode
 
 
 @dataclass

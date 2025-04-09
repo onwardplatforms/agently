@@ -121,120 +121,77 @@ def cli():
     type=click.Choice(["none", "debug", "info", "warning", "error", "critical"], case_sensitive=False),
     help="Override the log level",
 )
-def run(agent, log_level):
-    """Run an agent from your configuration."""
-    # Set up logging
-    if log_level:
-        level = getattr(LogLevel, log_level.upper())
-        configure_logging(level=level)
-        logger.debug(f"Log level set to {log_level.upper()}")
-    else:
-        configure_logging(level=LogLevel.NONE)
-
-    logger.info(f"Starting agently run with agent config: {agent}")
-
-    # Check if initialization is needed
-    agent_path = Path(agent)
-    if not agent_path.exists():
-        click.echo(f"Error: Agent configuration file not found: {agent_path}")
-        sys.exit(1)
-
-    # Check if lockfile exists and is valid
-    lockfile_path = Path.cwd() / "agently.lockfile.json"
-    if not lockfile_path.exists():
-        click.echo(f"{styles.error('Error: Plugins not initialized.')}")
-        click.echo(f"Run {styles.bold('agently init')} to initialize plugins first.")
-        sys.exit(1)
-
-    # Load the agent config and lockfile to compare
+@click.option(
+    "--continuous-reasoning",
+    is_flag=True,
+    help="Enable continuous reasoning mode to show agent's step-by-step thought process",
+)
+def run(agent, log_level, continuous_reasoning):
+    """Run an agent with the specified configuration."""
     try:
-        # Parse YAML but don't load full agent config yet
-        with open(agent_path, "r") as f:
-            yaml_config = yaml.safe_load(f)
+        # Override log level if specified
+        if log_level:
+            # Convert string to LogLevel enum value
+            log_level_value = getattr(LogLevel, log_level.upper())
+            configure_logging(level=log_level_value)
+        else:
+            configure_logging(level=LogLevel.WARNING)
 
-        # Read lockfile
-        with open(lockfile_path, "r") as f:
-            try:
-                lockfile = json.load(f)
-            except json.JSONDecodeError:
-                click.echo(f"{styles.error('Error: Invalid lockfile.')}")
-                click.echo(f"Run {styles.bold('agently init')} to fix.")
-                sys.exit(1)
+        # Load agent configuration
+        logger.info(f"Loading agent configuration from {agent}")
+        config = load_agent_config(agent)
 
-        # Check if all configured plugins are in the lockfile
-        plugins_yaml = yaml_config.get("plugins", {})
-        github_plugins = plugins_yaml.get("github", [])
-        local_plugins = plugins_yaml.get("local", [])
+        # Override continuous reasoning if specified
+        if continuous_reasoning:
+            config.continuous_reasoning = True
+            logger.info("Continuous reasoning mode enabled")
 
-        # Get the set of plugins that should be in the lockfile
-        expected_plugins = set()
+        # Initialize the agent
+        from agently.agents.agent import Agent
 
-        # Check GitHub plugins
-        for plugin_config in github_plugins:
-            source = plugin_config["source"]
+        click.echo(f"Initializing agent: {config.name}")
+        agent_instance = Agent(config)
+        # Initial setup for the agent is done, now we'll run it
 
-            # Create a temporary source object to parse the namespace/name
-            source_obj = GitHubPluginSource(
-                repo_url=source,
-                version=plugin_config.get("version", "main"),
-                plugin_path=plugin_config.get("plugin_path", ""),
-                namespace=plugin_config.get("namespace", ""),
-                name=plugin_config.get("name", ""),
-            )
+        # Set up the event loop to run the agent
+        async def init_and_run():
+            # Initialize the agent asynchronously
+            await agent_instance.initialize()
+            click.echo("Agent initialized successfully")
 
-            # Add to expected plugins
-            expected_plugins.add(f"{source_obj.namespace}/{source_obj.name}")
+            # Create a conversation context
+            from agently.conversation.context import ConversationContext
 
-        # Check local plugins
-        for plugin_config in local_plugins:
-            source_path = plugin_config["source"]
-            plugin_path = Path(source_path)
-            if not plugin_path.is_absolute():
-                # Resolve relative to the config file
-                plugin_path = (agent_path.parent / plugin_path).resolve()
-            plugin_name = plugin_path.name
+            context = ConversationContext(conversation_id=f"cli-{config.id}")
+            
+            # Run the appropriate interactive loop based on continuous reasoning setting
+            if config.continuous_reasoning:
+                click.echo("Running in continuous reasoning mode")
+                click.echo("The agent will show its step-by-step thought process\n")
+                # We don't await this function because it contains its own event loop
+                # for handling the interactive session
+                return context, agent_instance
+            else:
+                click.echo("Running in standard mode\n")
+                interactive_loop(config, context)
+                return None, None
 
-            # Add to expected plugins
-            expected_plugins.add(f"local/{plugin_name}")
+        # Run the initialization and interactive loop
+        try:
+            import asyncio
 
-        # Get the set of plugins in the lockfile
-        installed_plugins = set(lockfile.get("plugins", {}).keys())
-
-        # Check if any expected plugins are missing from the lockfile
-        missing_plugins = expected_plugins - installed_plugins
-        if missing_plugins:
-            click.echo(f"{styles.error('Error: Some plugins are not initialized:')}")
-            for plugin in missing_plugins:
-                click.echo(f"  - {plugin}")
-            click.echo(f"\nRun {styles.bold('agently init')} to initialize all plugins.")
-            sys.exit(1)
-
-        # Check if there are plugins in the lockfile that aren't in the config
-        extra_plugins = installed_plugins - expected_plugins
-        if extra_plugins:
-            click.echo(f"{styles.warning('Warning: Some installed plugins are not in your configuration:')}")
-            for plugin in extra_plugins:
-                click.echo(f"  - {plugin}")
-            click.echo(f"\nYou may want to run {styles.bold('agently init')} to clean up unused plugins.")
-            # Don't exit, just warn
-
-        # Now load the full agent config
-        agent_config = load_agent_config(agent_path)
-        logger.info(f"Loaded agent configuration for: {agent_config.name}")
-
-        # Check for required OpenAI API key if using OpenAI provider
-        if agent_config.model.provider == "openai" and not os.environ.get("OPENAI_API_KEY"):
-            click.echo(f"{styles.error('Error: OPENAI_API_KEY environment variable not set')}")
-            click.echo("Please set it with: export OPENAI_API_KEY=your_key_here")
-            sys.exit(1)
-
-        # All welcome messages and agent info are displayed in interactive.py
-        # Just run the interactive loop directly
-        interactive_loop(agent_config)
+            loop = asyncio.get_event_loop()
+            context, agent = loop.run_until_complete(init_and_run())
+            
+            # If we're using continuous reasoning, run its interactive loop separately
+            if context and agent:
+                interactive_loop_with_reasoning(agent, config, context)
+        except KeyboardInterrupt:
+            click.echo("\nExiting...")
+            
     except Exception as e:
-        click.echo(f"{styles.error(f'Error: {e}')}")
-        logger.exception(f"Error running agent: {e}")
-        sys.exit(1)
+        logger.exception(f"Error: {e}")
+        click.echo(f"Error: {e}")
 
 
 @cli.command()
@@ -597,3 +554,74 @@ def init(agent, force, quiet, log_level):
         click.echo(f"Error: {e}")
         logger.exception(f"Error initializing plugins: {e}")
         sys.exit(1)
+
+
+def interactive_loop_with_reasoning(agent, config, context):
+    """Run the interactive agent loop with continuous reasoning enabled.
+
+    Args:
+        agent: The Agent instance
+        config: The agent configuration
+        context: The conversation context
+    """
+    try:
+        import asyncio
+        
+        logger.info("Starting interactive loop with reasoning")
+        
+        # Display welcome message
+        provider = config.model.provider if hasattr(config.model, "provider") else "unknown"
+        model_name = config.model.model if hasattr(config.model, "model") else str(config.model)
+        
+        click.echo(f"\nThe agent {config.name} has been initialized using {provider} {model_name}")
+        if config.description:
+            click.echo(config.description)
+            
+        click.echo("\nType a message to begin. Type exit to quit.\n")
+        
+        # Main interaction loop
+        while True:
+            try:
+                # Get user input
+                user_input = click.prompt("You", prompt_suffix="> ")
+                logger.debug(f"User input: {user_input}")
+                
+                # Check for exit
+                if user_input.lower() in ["exit", "quit"]:
+                    logger.info("User requested exit")
+                    break
+                    
+                # Create message object
+                from agently.conversation.context import Message
+                message = Message(content=user_input, role="user")
+                
+                # Process with continuous reasoning
+                click.echo("\nAssistant (thinking)> ", nl=False)
+                
+                # Use our new continuous reasoning method
+                reasoning_chunks = []
+                
+                # Define the async process function that we'll use with the event loop
+                async def process_message():
+                    async for chunk in agent.process_continuous_reasoning(message, context):
+                        reasoning_chunks.append(chunk)
+                        click.echo(chunk, nl=False)
+                
+                # Run the coroutine inside the current event loop
+                loop = asyncio.get_event_loop()
+                loop.run_until_complete(process_message())
+                
+                click.echo("\n")  # Add a newline after response
+                
+            except KeyboardInterrupt:
+                logger.info("User interrupted with Ctrl+C")
+                click.echo("\nExiting...")
+                break
+            except Exception as e:
+                logger.exception(f"Error in interactive loop: {e}")
+                click.echo(f"\nError: {e}")
+        
+        logger.info("Interactive loop with reasoning completed")
+    except Exception as e:
+        logger.exception(f"Error in interactive loop: {e}")
+        click.echo(f"\nError: {e}")
