@@ -1,0 +1,21 @@
+{
+  "plugins": {},
+  "mcp_servers": {
+    "local/HelloGoodbye": {
+      "namespace": "local",
+      "name": "HelloGoodbye",
+      "full_name": "HelloGoodbye",
+      "version": "local",
+      "source_type": "local",
+      "source_path": "",
+      "command": "python",
+      "args": [
+        "servers/hello_goodbye_server.py"
+      ],
+      "description": "A plugin that can say hello and goodbye to users",
+      "variables": {},
+      "sha256": "",
+      "installed_at": "2025-04-09T03:12:58.069637"
+    }
+  }
+}

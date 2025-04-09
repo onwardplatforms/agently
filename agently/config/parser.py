@@ -5,14 +5,14 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any, Dict, List, Union
 from uuid import uuid4
 
 import jsonschema
 import yaml
 from dotenv import load_dotenv
 
-from agently.config.types import AgentConfig, ModelConfig, PluginConfig, PluginSourceType
+from agently.config.types import AgentConfig, MCPServerConfig, ModelConfig, PluginConfig, PluginSourceType
 from agently.plugins.sources import GitHubPluginSource, LocalPluginSource
 from agently.utils.logging import LogLevel
 
@@ -183,6 +183,59 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
         )
         plugin_configs.append(PluginConfig(source=github_source, variables=github_plugin.get("variables", {})))
 
+    # Create MCP server configs
+    mcp_server_configs = []
+    
+    # Process MCP servers by type
+    mcp_servers_yaml = yaml_config.get("mcp_servers", {})
+    
+    # Process local MCP servers
+    for local_mcp in mcp_servers_yaml.get("local", []):
+        source_path = None
+        if "source" in local_mcp:
+            source_path = local_mcp["source"]
+            if not os.path.isabs(source_path):
+                source_path = str((config_path.parent / source_path).resolve())
+        
+        mcp_server_configs.append(
+            MCPServerConfig(
+                name=local_mcp["name"],
+                command=local_mcp["command"],
+                args=local_mcp.get("args", []),
+                description=local_mcp.get("description", ""),
+                variables=local_mcp.get("variables", {}),
+                source_type="local",
+                source_path=source_path,
+            )
+        )
+    
+    # Process GitHub MCP servers
+    for github_mcp in mcp_servers_yaml.get("github", []):
+        name = github_mcp.get("name", "")
+        # If name is not provided, extract it from the source
+        if not name:
+            source = github_mcp["source"]
+            # Extract the name from the source (repo name without prefix)
+            if "/" in source:
+                name = source.split("/")[-1]
+                # Remove agently-mcp- prefix if it exists
+                if name.startswith("agently-mcp-"):
+                    name = name[len("agently-mcp-"):]
+        
+        mcp_server_configs.append(
+            MCPServerConfig(
+                name=name,
+                command=github_mcp["command"],
+                args=github_mcp.get("args", []),
+                description=github_mcp.get("description", ""),
+                variables=github_mcp.get("variables", {}),
+                source_type="github",
+                repo_url=github_mcp["source"],
+                version=github_mcp.get("version", "main"),
+                server_path=github_mcp.get("server_path", ""),
+            )
+        )
+
     # Set log level
     log_level = LogLevel.NONE  # Default
     
@@ -197,6 +250,7 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
         system_prompt=yaml_config["system_prompt"],
         model=model_config,
         plugins=plugin_configs,
+        mcp_servers=mcp_server_configs,
         log_level=log_level,
         continuous_reasoning=continuous_reasoning,
     )

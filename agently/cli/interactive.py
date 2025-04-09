@@ -152,7 +152,17 @@ def interactive_loop(agent_config: AgentConfig):
     """
     try:
         logger.info("Starting interactive loop")
-        asyncio.run(_run_interactive_loop(agent_config))
+        
+        # Get or create event loop more safely
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            # Create a new event loop if none exists
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        # Run the interactive loop
+        loop.run_until_complete(_run_interactive_loop(agent_config))
         logger.info("Interactive loop completed")
     except KeyboardInterrupt:
         logger.info("Interactive loop interrupted")
