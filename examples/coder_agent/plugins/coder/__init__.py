@@ -514,41 +514,24 @@ class CodeEditorPlugin(Plugin):
     3. EXECUTE CAREFULLY
        When making changes:
        - Make changes in a logical order (dependencies first)
-       - Use update_code() with exact matching to ensure precision
-       - Verify each change immediately after making it
+       - ALWAYS provide ALL required parameters to code modification functions
+       - Be careful with code indentation - match the indentation level of surrounding code
        - If a change fails, stop and explain why
-       - Never leave files in an inconsistent state
+       - Always apply changes after staging them to ensure they are saved
 
     4. VERIFY THOROUGHLY
        After changes are made:
-       - verify_changes() to check pending changes
+       - verify_changes() to check for any additional pending changes
        - Check that ALL related files are consistent
        - Confirm that ALL references are updated
        - Run any necessary validation
-       - Only apply_changes() when everything is verified
-
-    CRITICAL FUNCTIONS:
-    Multi-File Operations:
-    - search_across_files(query) -> ALWAYS use this first to find ALL instances
-    - find_references(symbol) -> ALWAYS use this to check dependencies
-
-    Safe Code Changes:
-    - update_code(path, target, new_content) -> Use exact matching
-    - verify_changes() -> ALWAYS verify before applying
-    - apply_changes() -> Only after verification
-    - revert_changes() -> If anything goes wrong
-
-    Support Functions:
-    - read_file() -> For examining code
-    - list_dir() -> For understanding structure
-    - format_code() -> After changes
-    - lint_code() -> For validation
+       - Ensure all changes are applied
 
     RULES:
     1. ALWAYS search before changing
     2. ALWAYS find all references
-    3. ALWAYS verify lint and format before applying
-    4. ALWAYS apply after verifying changes
+    3. ALWAYS match the indentation level of surrounding code when making changes
+    4. NEVER call apply_changes() after update_code, delete_code, or insert_code as they apply automatically
     5. NEVER make partial updates
     6. NEVER skip verification
     7. STOP if verification fails
@@ -1057,6 +1040,7 @@ class CodeEditorPlugin(Plugin):
     ) -> str:
         """
         Update code that matches a target snippet.
+        This function automatically applies changes - no separate call to apply_changes() is needed.
 
         Args:
             path: Path to the file to update
@@ -1073,6 +1057,17 @@ class CodeEditorPlugin(Plugin):
             logger.debug(f"Target snippet: {target_snippet}")
             logger.debug(f"New content: {new_content}")
             logger.debug(f"Match type: {match_type}")
+            logger.debug(f"Context lines: {context_lines}")
+            
+            # Log parameter types to help diagnose issues
+            logger.debug(f"Parameter types - path: {type(path)}, target_snippet: {type(target_snippet)}, new_content: {type(new_content)}")
+            
+            if not path or not isinstance(path, str):
+                return "Error: 'path' parameter is required and must be a string"
+            if not target_snippet or not isinstance(target_snippet, str):
+                return "Error: 'target_snippet' parameter is required and must be a string"
+            if not new_content or not isinstance(new_content, str):
+                return "Error: 'new_content' parameter is required and must be a string"
 
             print_action("Preparing to update code")
             print_file_header(path)
@@ -1119,52 +1114,6 @@ class CodeEditorPlugin(Plugin):
                 )
                 logger.warning("Found match but context differs significantly")
 
-            # Get the matched lines and their indentation
-            file_lines = file_content.splitlines()
-            matched_lines = file_lines[
-                match_result.start_line - 1 : match_result.end_line
-            ]
-
-            # Calculate base indentation level from the matched block
-            base_indent = None
-            for line in matched_lines:
-                if line.strip():  # Skip empty lines
-                    indent = len(line) - len(line.lstrip())
-                    if base_indent is None or indent < base_indent:
-                        base_indent = indent
-
-            if base_indent is None:
-                base_indent = 0
-
-            # Process the new content
-            new_lines = new_content.splitlines()
-
-            # Calculate the minimum indentation in the new content
-            new_base_indent = None
-            for line in new_lines:
-                if line.strip():  # Skip empty lines
-                    indent = len(line) - len(line.lstrip())
-                    if new_base_indent is None or indent < new_base_indent:
-                        new_base_indent = indent
-
-            if new_base_indent is None:
-                new_base_indent = 0
-
-            # Adjust indentation while preserving relative levels
-            indented_lines = []
-            for line in new_lines:
-                if not line.strip():  # Preserve empty lines as is
-                    indented_lines.append(line)
-                else:
-                    # Calculate relative indentation from base
-                    relative_indent = len(line) - len(line.lstrip()) - new_base_indent
-                    # Apply base indentation plus relative indentation
-                    indented_lines.append(
-                        " " * (base_indent + relative_indent) + line.lstrip()
-                    )
-
-            new_content = "\n".join(indented_lines)
-
             # Create the change object
             change = CodeChange(
                 file_path=str(file_path),
@@ -1194,12 +1143,18 @@ class CodeEditorPlugin(Plugin):
             print_result(
                 f"Updated code at lines {match_result.start_line}-{match_result.end_line} ({match_result.match_type} match)"
             )
-            return (
-                f"Successfully updated code:\n"
-                f"- File: {path}\n"
-                f"- Lines: {match_result.start_line}-{match_result.end_line}\n"
-                f"- Match type: {match_result.match_type}"
-            )
+            
+            # Automatically apply changes
+            apply_result = self.apply_changes()
+            if "Successfully applied changes" in apply_result:
+                return (
+                    f"Successfully updated code:\n"
+                    f"- File: {path}\n"
+                    f"- Lines: {match_result.start_line}-{match_result.end_line}\n"
+                    f"- Match type: {match_result.match_type}"
+                )
+            else:
+                return f"Error applying changes: {apply_result}"
 
         except Exception as e:
             logger.error(f"Error updating code in {path}: {str(e)}")
@@ -1209,13 +1164,14 @@ class CodeEditorPlugin(Plugin):
     @agently_function(description="Delete code that matches a target snippet.")
     def delete_code(
         self,
-        path: str,
-        target_snippet: str,
+        path: str = "",
+        target_snippet: str = "",
         match_type: Literal["exact", "fuzzy"] = "exact",
         context_lines: int = 2,
     ) -> str:
         """
         Delete code that matches the target snippet.
+        This function automatically applies changes - no separate call to apply_changes() is needed.
 
         Args:
             path (str): Path to the file to modify
@@ -1227,9 +1183,26 @@ class CodeEditorPlugin(Plugin):
             str: Success message or error
         """
         try:
+            # Handle missing parameters with helpful error messages
+            if not path:
+                files_in_cwd = "\n".join([f"- {f}" for f in os.listdir(self.workspace_root) if os.path.isfile(os.path.join(self.workspace_root, f))])
+                return (
+                    f"Error: Missing 'path' parameter. Please specify which file to modify.\n"
+                    f"Files in current directory:\n{files_in_cwd}"
+                )
+            if not target_snippet:
+                return (
+                    f"Error: Missing 'target_snippet' parameter. Please specify the code to delete.\n"
+                    f"Example usage: delete_code(path='example.py', target_snippet='def example_function():')"
+                )
+                
             logger.debug(f"Preparing to delete code from {path}")
             logger.debug(f"Target snippet: {target_snippet}")
             logger.debug(f"Match type: {match_type}")
+            logger.debug(f"Context lines: {context_lines}")
+            
+            # Log parameter types to help diagnose issues
+            logger.debug(f"Parameter types - path: {type(path)}, target_snippet: {type(target_snippet)}")
 
             print_action(f"Preparing to delete code from {path}")
 
@@ -1314,15 +1287,16 @@ class CodeEditorPlugin(Plugin):
     @agently_function(description="Insert code at a specific position in a file.")
     def insert_code(
         self,
-        path: str,
-        new_content: str,
-        target_snippet: str,
+        path: str = "",
+        new_content: str = "",
+        target_snippet: str = "",
         position: Literal["before", "after"] = "after",
         match_type: Literal["exact", "fuzzy"] = "exact",
         context_lines: int = 2,
     ) -> str:
         """
         Insert new code at a specific position in a file.
+        This function automatically applies changes - no separate call to apply_changes() is needed.
 
         Args:
             path (str): Path to the file to modify
@@ -1336,11 +1310,33 @@ class CodeEditorPlugin(Plugin):
             str: Success message or error
         """
         try:
+            # Handle missing parameters with helpful error messages
+            if not path:
+                files_in_cwd = "\n".join([f"- {f}" for f in os.listdir(self.workspace_root) if os.path.isfile(os.path.join(self.workspace_root, f))])
+                return (
+                    f"Error: Missing 'path' parameter. Please specify which file to modify.\n"
+                    f"Files in current directory:\n{files_in_cwd}"
+                )
+            if not new_content:
+                return (
+                    f"Error: Missing 'new_content' parameter. Please specify the code to insert.\n"
+                    f"Example usage: insert_code(path='example.py', new_content='def new_function():\\n    pass', target_snippet='# Some existing code')"
+                )
+            if not target_snippet:
+                return (
+                    f"Error: Missing 'target_snippet' parameter. Please specify where to insert the code.\n"
+                    f"Example usage: insert_code(path='example.py', new_content='def new_function():\\n    pass', target_snippet='# Some existing code')"
+                )
+                
             logger.debug(f"Inserting code in {path}")
             logger.debug(f"Target snippet: {target_snippet}")
             logger.debug(f"New content: {new_content}")
             logger.debug(f"Position: {position}")
             logger.debug(f"Match type: {match_type}")
+            logger.debug(f"Context lines: {context_lines}")
+            
+            # Log parameter types to help diagnose issues
+            logger.debug(f"Parameter types - path: {type(path)}, target_snippet: {type(target_snippet)}, new_content: {type(new_content)}")
 
             print_action(f"Inserting code in {path}")
 
@@ -1395,7 +1391,14 @@ class CodeEditorPlugin(Plugin):
             insert_point = match_result.start_line - 1
             if position == "after":
                 insert_point = match_result.end_line
-            lines.insert(insert_point, new_content)
+            
+            # Split new_content into lines and insert them individually
+            new_content_lines = new_content.splitlines()
+            
+            # Insert each line in reverse order to maintain correct positions
+            for i, line in enumerate(reversed(new_content_lines)):
+                lines.insert(insert_point, line)
+            
             new_content = "\n".join(lines)
             if new_content and not new_content.endswith("\n"):
                 new_content += "\n"
@@ -1411,13 +1414,17 @@ class CodeEditorPlugin(Plugin):
                 f"match_type={match_result.match_type})"
             )
 
-            return (
-                f"Successfully queued insertion:\n"
-                f"- File: {path}\n"
-                f"- Lines: {match_result.start_line}-{match_result.end_line}\n"
-                f"- Match type: {match_result.match_type}\n"
-                f"Use verify_changes() to review and apply_changes() to apply"
-            )
+            # Automatically apply changes
+            result = self.apply_changes()
+            if "Successfully applied changes" in result:
+                return (
+                    f"Successfully inserted code:\n"
+                    f"- File: {path}\n"
+                    f"- Lines: {match_result.start_line}-{match_result.end_line}\n"
+                    f"- Match type: {match_result.match_type}"
+                )
+            else:
+                return f"Error applying changes: {result}"
 
         except Exception as e:
             logger.error(f"Error inserting code into {path}: {str(e)}")
@@ -1601,6 +1608,16 @@ class CodeEditorPlugin(Plugin):
 
         return True
 
+    @agently_function(description="Check if there are pending changes to apply.")
+    def has_pending_changes(self) -> bool:
+        """
+        Check if there are pending changes that need to be applied.
+
+        Returns:
+            bool: True if there are pending changes, False otherwise
+        """
+        return bool(self._pending_changes)
+
     @agently_function(description="Apply pending changes to files.")
     def apply_changes(self) -> str:
         """
@@ -1613,12 +1630,71 @@ class CodeEditorPlugin(Plugin):
             logger.debug("Applying changes to files")
             print_action("Applying changes to files")
 
+            # Check if there are any pending changes
+            if not self._pending_changes:
+                logger.debug("No pending changes to apply")
+                
+                # Check if there are any staged changes in Git
+                result = subprocess.run(
+                    ["git", "diff", "--staged"],
+                    cwd=self.git_editor.temp_dir,
+                    capture_output=True,
+                    text=True,
+                )
+                
+                if not result.stdout.strip():
+                    result = subprocess.run(
+                        ["git", "status", "--porcelain"],
+                        cwd=self.git_editor.temp_dir,
+                        capture_output=True,
+                        text=True,
+                    )
+                    
+                    if not result.stdout.strip():
+                        return "No changes to apply."
+                
+                # Apply all staged/modified files
+                for root, _, files in os.walk(self.git_editor.temp_dir):
+                    rel_root = Path(root).relative_to(self.git_editor.temp_dir)
+                    for file in files:
+                        if file == ".git" or ".git" in str(rel_root):
+                            continue
+                        
+                        rel_path = rel_root / file
+                        if str(rel_path) == ".gitignore":
+                            continue
+                            
+                        try:
+                            temp_path = self.git_editor.temp_dir / rel_path
+                            abs_path = self.workspace_root / rel_path
+                            
+                            # Check if file has changed
+                            if abs_path.exists():
+                                with open(temp_path, "r", encoding="utf-8") as f:
+                                    temp_content = f.read()
+                                with open(abs_path, "r", encoding="utf-8") as f:
+                                    abs_content = f.read()
+                                    
+                                if temp_content == abs_content:
+                                    continue
+                            
+                            # Copy the file to the workspace
+                            abs_path.parent.mkdir(parents=True, exist_ok=True)
+                            shutil.copy2(temp_path, abs_path)
+                            logger.debug(f"Copied {temp_path} to {abs_path}")
+                        except Exception as e:
+                            logger.error(f"Error copying {temp_path} to {abs_path}: {str(e)}")
+                
+                return "Successfully applied changes to all modified files."
+
             # Group changes by file for atomic application
             results = []
             for file_path, changes in self._pending_changes.items():
                 try:
                     # Stage the file in our Git repo
                     temp_path = self.git_editor._stage_file_for_edit(file_path)
+                    
+                    logger.debug(f"Applying changes to {file_path} (temp path: {temp_path})")
 
                     # Read current content
                     with open(temp_path, "r", encoding="utf-8") as f:
@@ -1640,25 +1716,33 @@ class CodeEditorPlugin(Plugin):
                             insert_point = change.target_snippet.start_line - 1
                             if change.position == "after":
                                 insert_point = change.target_snippet.end_line
-                            lines.insert(insert_point, change.new_content)
+                            
+                            # Split new_content into lines and insert them individually
+                            new_content_lines = change.new_content.splitlines()
+                            
+                            # Insert each line in reverse order to maintain correct positions
+                            for i, line in enumerate(reversed(new_content_lines)):
+                                lines.insert(insert_point, line)
 
                         content = "\n".join(lines)
                         if content and not content.endswith("\n"):
                             content += "\n"
 
-                    # Write updated content
+                    # Write updated content back to temp file
                     with open(temp_path, "w", encoding="utf-8") as f:
                         f.write(content)
 
-                    # Apply changes using Git
-                    self.git_editor.apply_changes(file_path)
+                    # Copy the temp file directly to the actual file
+                    actual_file = Path(file_path)
+                    shutil.copy2(temp_path, actual_file)
+                    logger.debug(f"Copied {temp_path} to {actual_file}")
 
                     results.append(f"Successfully applied changes to {file_path}")
 
                 except Exception as e:
+                    logger.error(f"Error applying changes to {file_path}: {str(e)}")
                     results.append(
-                        f"Error applying changes to {file_path}, "
-                        f"Git-based application failed: {str(e)}"
+                        f"Error applying changes to {file_path}: {str(e)}"
                     )
 
             # Clear pending changes
@@ -2027,118 +2111,80 @@ class CodeEditorPlugin(Plugin):
     )
     def lint_code(
         self,
-        path: str,
+        path: str = "",
         fix: bool = False,
     ) -> str:
         """
         Lint code in a file using language-appropriate linters.
 
         Args:
-            path (str): Path to the file to lint
-            fix: Whether to attempt to fix linting issues automatically
+            path: Path to the file to lint
+            fix: Whether to automatically fix issues (if supported by the linter)
 
         Returns:
-            str: Linting results or error message
+            str: Lint results or error message
         """
+        # Check if path is provided
+        if not path:
+            files_in_cwd = "\n".join([f"- {f}" for f in os.listdir(self.workspace_root) if os.path.isfile(os.path.join(self.workspace_root, f))])
+            return (
+                f"Error: Missing 'path' parameter. Please specify which file to lint.\n"
+                f"Files in current directory:\n{files_in_cwd}"
+            )
+            
+        print_action(f"Linting file: {path}")
+        logger.debug(f"Linting file: {path}, with fix={fix}")
+        
         try:
-            logger.debug(f"Linting file: {path}")
-            logger.debug(f"Fix: {fix}")
-
-            print_action(f"Linting file: {path}")
-
-            # Validate and get file path
             file_path = self._validate_path(path)
             if not file_path.is_file():
                 return f"Error: File '{path}' does not exist or is not a regular file."
 
-            # Detect language from file extension
-            ext = file_path.suffix.lower()
-
             # Map of extensions to linting commands
             lint_commands = {
-                ".py": {
-                    "cmd": ["flake8", str(file_path)],
-                    "fix_cmd": ["black", str(file_path)] if fix else None,
-                },
-                ".js": {
-                    "cmd": ["eslint", str(file_path)],
-                    "fix_cmd": ["eslint", "--fix", str(file_path)] if fix else None,
-                },
-                ".go": {
-                    "cmd": ["golint", str(file_path)],
-                    "fix_cmd": ["gofmt", "-w", str(file_path)] if fix else None,
-                },
-                ".json": {
-                    "cmd": ["jsonlint", str(file_path)],
-                    "fix_cmd": None,  # No auto-fix for JSON
-                },
-                ".yaml": {
-                    "cmd": ["yamllint", str(file_path)],
-                    "fix_cmd": None,  # No auto-fix for YAML
-                },
-                ".yml": {
-                    "cmd": ["yamllint", str(file_path)],
-                    "fix_cmd": None,  # No auto-fix for YAML
-                },
-                ".tf": {
-                    "cmd": ["tflint", "--format=compact", str(file_path)],
-                    "fix_cmd": ["terraform", "fmt", str(file_path)] if fix else None,
-                },
-                ".tfvars": {
-                    "cmd": ["tflint", "--format=compact", str(file_path)],
-                    "fix_cmd": ["terraform", "fmt", str(file_path)] if fix else None,
-                },
+                ".py": ["flake8", str(file_path)],
+                ".js": ["eslint", str(file_path)],
+                ".ts": ["eslint", str(file_path)],
+                ".tsx": ["eslint", str(file_path)],
+                ".jsx": ["eslint", str(file_path)],
+                ".go": ["golint", str(file_path)],
             }
 
-            if ext not in lint_commands:
-                return f"Error: No linter configured for files with extension '{ext}'"
+            # Add auto-fix flags if requested
+            if fix:
+                lint_commands[".py"] = ["black", str(file_path)]
+                lint_commands[".js"] = ["eslint", "--fix", str(file_path)]
+                lint_commands[".ts"] = ["eslint", "--fix", str(file_path)]
+                lint_commands[".tsx"] = ["eslint", "--fix", str(file_path)]
+                lint_commands[".jsx"] = ["eslint", "--fix", str(file_path)]
+                lint_commands[".go"] = ["gofmt", "-w", str(file_path)]
 
-            commands = lint_commands[ext]
-            results = []
+            # Get the file extension
+            ext = file_path.suffix.lower()
+            if ext not in lint_commands:
+                return f"Error: Unsupported file type: {ext}"
 
             # Run the linter
-            try:
-                result = subprocess.run(
-                    commands["cmd"],
-                    capture_output=True,
-                    text=True,
-                    check=False,  # Don't raise on linting errors
-                )
+            cmd = lint_commands[ext]
+            logger.debug(f"Running lint command: {' '.join(cmd)}")
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
 
-                if result.returncode == 0:
-                    results.append("No linting issues found.")
-                else:
-                    results.append("Linting issues found:")
-                    results.append(result.stdout.strip() or result.stderr.strip())
-
-                    # If fix is requested and a fix command exists
-                    if fix and commands["fix_cmd"]:
-                        results.append("\nAttempting to fix issues...")
-                        fix_result = subprocess.run(
-                            commands["fix_cmd"],
-                            capture_output=True,
-                            text=True,
-                            check=False,
-                        )
-
-                        if fix_result.returncode == 0:
-                            results.append("Successfully fixed linting issues.")
-                        else:
-                            results.append("Failed to fix some issues:")
-                            results.append(
-                                fix_result.stdout.strip() or fix_result.stderr.strip()
-                            )
-
-            except FileNotFoundError:
-                return f"Error: Required linting tools not found for {ext} files."
-            except Exception as e:
-                return f"Error running linter: {str(e)}"
-
-            return "\n".join(results)
+            # Check for linting errors
+            if result.returncode == 0:
+                if result.stdout.strip():
+                    return f"Linting passed with notes:\n{result.stdout}"
+                return f"Linting passed successfully for {path}"
+            else:
+                return f"Linting found issues in {path}:\n{result.stderr or result.stdout}"
 
         except Exception as e:
-            logger.error(f"Error linting file {path}: {str(e)}")
-            return f"Error linting file: {str(e)}"
+            logger.error(f"Error linting {path}: {str(e)}")
+            return f"Error linting {path}: {str(e)}"
 
     @agently_function(
         description="Format code in a file using language-appropriate formatters."
@@ -2161,17 +2207,34 @@ class CodeEditorPlugin(Plugin):
         if not file_path.exists():
             return f"Error: File not found: {file_path}"
 
+        # Find the corresponding temp file path
+        try:
+            # Get relative path from workspace root
+            if file_path.is_absolute():
+                rel_path = file_path.relative_to(self.workspace_root)
+            else:
+                rel_path = file_path
+            temp_path = (self.git_editor.temp_dir / rel_path).resolve()
+            
+            # Check if temp file exists (it might not if the file hasn't been staged yet)
+            if not temp_path.exists():
+                logger.debug(f"Temp file {temp_path} doesn't exist, staging file first")
+                temp_path = self.git_editor._stage_file_for_edit(file_path)
+        except Exception as e:
+            logger.error(f"Error finding temp file for {file_path}: {str(e)}")
+            return f"Error finding temp file: {str(e)}"
+
         # Map of extensions to formatting commands
         format_commands = {
-            ".py": ["black", str(file_path)],
-            ".js": ["prettier", "--write", str(file_path)],
-            ".ts": ["prettier", "--write", str(file_path)],
-            ".go": ["gofmt", "-w", str(file_path)],
-            ".tf": ["terraform", "fmt", str(file_path)],
-            ".tfvars": ["terraform", "fmt", str(file_path)],
-            ".json": ["prettier", "--write", str(file_path)],
-            ".yaml": ["prettier", "--write", str(file_path)],
-            ".yml": ["prettier", "--write", str(file_path)],
+            ".py": ["black", str(temp_path)],
+            ".js": ["prettier", "--write", str(temp_path)],
+            ".ts": ["prettier", "--write", str(temp_path)],
+            ".go": ["gofmt", "-w", str(temp_path)],
+            ".tf": ["terraform", "fmt", str(temp_path)],
+            ".tfvars": ["terraform", "fmt", str(temp_path)],
+            ".json": ["prettier", "--write", str(temp_path)],
+            ".yaml": ["prettier", "--write", str(temp_path)],
+            ".yml": ["prettier", "--write", str(temp_path)],
         }
 
         # Get the file extension
@@ -2182,6 +2245,7 @@ class CodeEditorPlugin(Plugin):
         # Run the formatter
         try:
             cmd = format_commands[ext]
+            logger.debug(f"Formatting temp file: {temp_path} with command: {' '.join(cmd)}")
             result = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -2190,11 +2254,19 @@ class CodeEditorPlugin(Plugin):
             )
 
             if result.returncode == 0:
-                return f"Successfully formatted {file_path}"
+                # Make sure changes are staged in Git
+                subprocess.run(
+                    ["git", "add", str(rel_path)],
+                    cwd=self.git_editor.temp_dir,
+                    check=True,
+                    capture_output=True,
+                )
+                return f"Successfully formatted {path}"
             else:
                 error_msg = result.stderr.strip() or result.stdout.strip()
-                return f"Error formatting {file_path}: {error_msg}"
+                return f"Error formatting {path}: {error_msg}"
         except FileNotFoundError:
             return f"Error: Required formatter not found for {ext} files"
         except Exception as e:
-            return f"Error formatting {file_path}: {str(e)}"
+            return f"Error formatting {path}: {str(e)}"
+

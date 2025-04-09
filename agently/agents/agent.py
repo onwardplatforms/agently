@@ -6,6 +6,9 @@ including initialization, plugin management, and message processing.
 
 import logging
 from typing import Any, AsyncGenerator, Dict, List, Optional
+import inspect
+import random
+import asyncio
 
 from semantic_kernel import Kernel
 from semantic_kernel.contents.streaming_chat_message_content import (
@@ -17,7 +20,7 @@ from semantic_kernel.exceptions.content_exceptions import ContentAdditionExcepti
 from agently.config.types import AgentConfig
 from agently.conversation.context import ConversationContext, Message
 from agently.core import get_error_handler
-from agently.errors import AgentError, ErrorContext, RetryConfig, RetryHandler
+from agently.errors import AgentError, AgentRuntimeError, ErrorContext, ErrorSeverity, RetryConfig, RetryHandler
 from agently.models.base import ModelProvider
 from agently.agents.reasoning import ReasoningChain
 from agently.agents.prompts import DEFAULT_PROMPT, CONTINUOUS_REASONING_PROMPT
@@ -329,14 +332,14 @@ class Agent:
                                     else:
                                         logger.debug(f"Other message type with role {msg.role}: {msg}")
                     except ContentAdditionException as e:
-                        # Handle the ContentAdditionException gracefully
-                        logger.warning(
+                        # Handle the ContentAdditionException gracefully - log at debug level instead of warning
+                        logger.debug(
                             f"ContentAdditionException occurred: {e}. This is expected when mixing message roles."
                         )
-                        # Log more details about the exception
-                        logger.warning(f"Exception details: {str(e)}")
-                        logger.warning(f"Exception type: {type(e).__name__}")
-                        # We've already yielded the text chunks, so we can continue
+                        # Log more details about the exception at debug level
+                        logger.debug(f"Exception details: {str(e)}")
+                        logger.debug(f"Exception type: {type(e).__name__}")
+                        # We've already yielded text chunks, so we can continue
                     except Exception as e:
                         logger.error(f"Error during streaming: {e}", exc_info=e)
                         yield f"\n\nError during streaming: {str(e)}"
@@ -584,13 +587,13 @@ class Agent:
                                     else:
                                         logger.debug(f"Other message type with role {msg.role}: {msg}")
                     except ContentAdditionException as e:
-                        # Handle the ContentAdditionException gracefully
-                        logger.warning(
+                        # Handle the ContentAdditionException gracefully - log at debug level instead of warning
+                        logger.debug(
                             f"ContentAdditionException occurred: {e}. This is expected when mixing message roles."
                         )
-                        # Log more details about the exception
-                        logger.warning(f"Exception details: {str(e)}")
-                        logger.warning(f"Exception type: {type(e).__name__}")
+                        # Log more details about the exception at debug level
+                        logger.debug(f"Exception details: {str(e)}")
+                        logger.debug(f"Exception type: {type(e).__name__}")
                         # We've already yielded text chunks, so we can continue
                     except Exception as e:
                         logger.error(f"Error during streaming: {e}", exc_info=e)
@@ -599,13 +602,17 @@ class Agent:
                     # Process tool messages if any
                     tool_messages = self._extract_tool_messages(result)
                     if tool_messages:
-                        logger.debug(f"Processing {len(tool_messages)} tool messages")
+                        logger.debug(f"==== PROCESSING {len(tool_messages)} TOOL MESSAGES IN CONTINUOUS REASONING ====")
                         try:
                             # Process each tool call
-                            for tool_message in tool_messages:
+                            for i, tool_message in enumerate(tool_messages):
+                                logger.debug(f"Processing tool message {i}: {tool_message}")
+                                
                                 # Extract tool name and input
                                 tool_name = tool_message.get("name", "unknown_tool")
                                 tool_input = tool_message.get("arguments", {})
+                                
+                                logger.debug(f"Extracted tool_name: {tool_name}, type: {type(tool_name)}")
                                 
                                 # Execute the tool and get result
                                 tool_result = await self._execute_tool(tool_name, tool_input)
@@ -616,8 +623,22 @@ class Agent:
                                 # Yield the tool call information
                                 yield f"Tool call: {tool_name}\nInput: {tool_input}\nResult: {tool_result}\n"
                                 
+                                # Check if the tool call failed due to missing parameters
+                                if isinstance(tool_result, str) and tool_result.startswith("Error: Missing required parameters"):
+                                    # Feed the error back to the LLM to allow it to retry
+                                    logger.debug(f"Tool call failed, feeding error back to LLM: {tool_result}")
+                                    yield f"The tool call failed. {tool_result}\n"
+                                    
+                                    # Instead of trying to invoke the kernel again with a new message,
+                                    # we'll just yield a message prompting the agent to try again
+                                    # This avoids the StreamingChatMessageContent role conflict
+                                    yield f"\nPlease try again with the correct parameters for {tool_name}. You need to provide: {tool_result.split(':', 2)[2].strip()}\n"
+                                    
+                                    # We don't need to add a new message to the context or invoke the kernel again
+                                    # The agent will see this message in the next turn and can respond appropriately
+                                
                         except Exception as e:
-                            logger.error(f"Error processing tool messages: {e}", exc_info=e)
+                            logger.error(f"Error processing tool messages: {str(e)}", exc_info=True)
                             yield f"\n\nError processing tool calls: {str(e)}"
 
                     # Add complete response to history
@@ -678,30 +699,81 @@ class Agent:
         """
         tool_messages = []
         
+        # Add debug logging for the result
+        logger.debug(f"_extract_tool_messages received result type: {type(result)}")
+        logger.debug(f"==== EXTRACT TOOL MESSAGES ====")
+        logger.debug(f"Result type: {type(result)}")
+        
         # Check if the result is a list of messages
         if isinstance(result, list):
-            for item in result:
+            logger.debug(f"Result is a list with {len(result)} items")
+            for i, item in enumerate(result):
+                # Only log the item type, not the full content which could be very verbose
+                logger.debug(f"Processing item {i}, type: {type(item)}")
+                
                 # Look for tool calls in message content
                 if hasattr(item, "role") and getattr(item, "role") == "tool":
+                    logger.debug(f"Found tool message at index {i}")
                     # Try to extract function name and arguments
                     if hasattr(item, "name"):
                         tool_name = getattr(item, "name", "unknown_tool")
                         tool_args = getattr(item, "arguments", {})
-                        tool_messages.append({
-                            "name": tool_name,
-                            "arguments": tool_args
-                        })
+                        logger.debug(f"Extracted tool name: {tool_name}, type: {type(tool_name)}")
+                        # Only add tool messages with valid names
+                        if tool_name is not None:
+                            tool_messages.append({
+                                "name": tool_name,
+                                "arguments": tool_args
+                            })
+                        else:
+                            logger.debug(f"Skipping tool message with None name")
+                    else:
+                        logger.debug(f"Tool message at index {i} has no 'name' attribute")
+                    
                     # Also check inside items if there's a nested structure
                     if hasattr(item, "items"):
-                        for sub_item in getattr(item, "items", []):
+                        items_list = getattr(item, "items", [])
+                        logger.debug(f"Tool message has 'items' attribute with {len(items_list)} items")
+                        for j, sub_item in enumerate(items_list):
                             if hasattr(sub_item, "function_name"):
                                 tool_name = getattr(sub_item, "function_name", "unknown_tool")
                                 tool_args = getattr(sub_item, "function_parameters", {})
-                                tool_messages.append({
-                                    "name": tool_name,
-                                    "arguments": tool_args
-                                })
+                                logger.debug(f"Extracted nested tool name: {tool_name}, type: {type(tool_name)}")
+                                # Only add tool messages with valid names
+                                if tool_name is not None:
+                                    tool_messages.append({
+                                        "name": tool_name,
+                                        "arguments": tool_args
+                                    })
+                                else:
+                                    logger.debug(f"Skipping nested tool message with None name")
+                            else:
+                                logger.debug(f"Sub-item {j} has no 'function_name' attribute")
+                
+                elif hasattr(item, "items") and not (hasattr(item, "role") and getattr(item, "role") == "tool"):
+                    # Check for tool calls in items even if the parent is not a tool message
+                    items_list = getattr(item, "items", [])
+                    if items_list:
+                        logger.debug(f"Non-tool message at index {i} has 'items' attribute with {len(items_list)} items")
+                        for j, sub_item in enumerate(items_list):
+                            if hasattr(sub_item, "function_name"):
+                                tool_name = getattr(sub_item, "function_name", "unknown_tool")
+                                tool_args = getattr(sub_item, "function_parameters", {})
+                                logger.debug(f"Extracted non-tool nested tool name: {tool_name}, type: {type(tool_name)}")
+                                # Only add tool messages with valid names
+                                if tool_name is not None:
+                                    tool_messages.append({
+                                        "name": tool_name,
+                                        "arguments": tool_args
+                                    })
+                                else:
+                                    logger.debug(f"Skipping non-tool nested tool message with None name")
+        else:
+            logger.debug(f"Result is not a list, cannot extract tool messages")
         
+        logger.debug(f"==== FINAL EXTRACTED TOOL MESSAGES: {len(tool_messages)} ====")
+        for i, msg in enumerate(tool_messages):
+            logger.debug(f"Tool message {i}: {msg}")
         return tool_messages
         
     async def _execute_tool(self, tool_name: str, tool_input: Dict[str, Any]) -> Any:
@@ -714,21 +786,33 @@ class Agent:
         Returns:
             The result of the tool execution
         """
+        logger.debug(f"==== EXECUTE TOOL ====")
+        logger.debug(f"Tool name: {tool_name}, type: {type(tool_name)}")
+        
         if not self.plugin_manager:
             logger.warning("No plugin manager available, cannot execute tools")
             return f"Error: No plugin manager available to execute {tool_name}"
             
         try:
+            # Check if tool_name is None
+            if tool_name is None:
+                logger.error("Tool name is None, cannot execute tool")
+                return "Error: Tool name is None, cannot execute tool"
+                
             # Try to find the tool in the plugin manager
             tool_parts = tool_name.split(".")
+            logger.debug(f"Split tool_name into parts: {tool_parts}")
+            
             if len(tool_parts) > 1:
                 # Format: plugin_name.function_name
                 plugin_name = tool_parts[0]
                 function_name = tool_parts[1]
+                logger.debug(f"Parsed plugin_name: {plugin_name}, function_name: {function_name}")
             else:
                 # Just a function name, try to find it in any plugin
                 plugin_name = None
                 function_name = tool_name
+                logger.debug(f"No plugin specified, using function_name: {function_name}")
                 
             # Execute the function through the plugin manager
             if plugin_name:
@@ -743,17 +827,47 @@ class Agent:
             else:
                 # Try to find the function in any plugin
                 logger.debug(f"Searching for tool {function_name} in all plugins")
-                for plugin_class, plugin_instance in self.plugin_manager.plugins.values():
+                for plugin_name, (plugin_class, plugin_instance) in self.plugin_manager.plugins.items():
                     if hasattr(plugin_instance, function_name):
                         logger.debug(f"Found tool {function_name} in plugin {plugin_instance.name}")
                         func = getattr(plugin_instance, function_name)
-                        result = await func(**tool_input)
-                        return result
-                    
+                        is_coroutine = inspect.iscoroutinefunction(func)
+                        logger.debug(f"Function is coroutine: {is_coroutine}")
+                        
+                        try:
+                            if is_coroutine:
+                                logger.debug(f"Executing async function {function_name}")
+                                result = await func(**tool_input)
+                            else:
+                                logger.debug(f"Executing sync function {function_name}")
+                                import asyncio
+                                result = await asyncio.to_thread(func, **tool_input)
+                                
+                            return result
+                        except TypeError as e:
+                            # This is likely a parameter error
+                            error_msg = str(e)
+                            logger.warning(f"Parameter error executing function {function_name}: {error_msg}")
+                            
+                            # Check if this is a missing parameter error
+                            if "missing" in error_msg and "required" in error_msg and "argument" in error_msg:
+                                # Extract the missing parameter name(s)
+                                import re
+                                missing_params = re.findall(r"'(\w+)'", error_msg)
+                                
+                                # Return a helpful error message that the LLM can use to correct its call
+                                return f"Error: Missing required parameters for {function_name}: {', '.join(missing_params)}. Please provide values for these parameters and try again."
+                            
+                            # Other TypeError
+                            return f"Error: Invalid parameters for {function_name}: {error_msg}. Please check parameter types and values."
+                        except Exception as e:
+                            logger.error(f"Error executing function {function_name}: {str(e)}")
+                            return f"Error executing function {function_name}: {str(e)}"
+                
                 # If we get here, we didn't find the function
-                logger.warning(f"Tool {function_name} not found in any plugin")
+                logger.error(f"Tool {function_name} not found in any plugin")
                 return f"Error: Tool {function_name} not found"
                 
         except Exception as e:
-            logger.exception(f"Error executing tool {tool_name}: {e}")
+            logger.error(f"Error executing tool {tool_name}: {str(e)}", exc_info=True)
             return f"Error executing tool {tool_name}: {str(e)}"

@@ -87,6 +87,37 @@ EOF
 agently run
 ```
 
+## Coder Agent Quick Start
+
+The Coder Agent is a powerful AI coding assistant with Git-backed code editing capabilities:
+
+```bash
+# Install in development mode
+pip install -e .
+
+# Navigate to the coder agent example
+cd examples/coder_agent
+
+# Run the coder agent
+agently run
+```
+
+With the Coder Agent, you can:
+- Create and modify files
+- Search across codebases
+- Find references to symbols
+- Format and lint code
+- Track changes with Git-based version control
+
+Example interactions:
+```
+> create a fibonacci.py file
+> add types and Google style docstrings
+> search for all references to a function
+```
+
+For more details, see the [Coder Agent documentation](examples/coder_agent/README.md).
+
 ## CLI Commands
 
 Agently provides a convenient command-line interface for managing and interacting with your agents:
@@ -148,6 +179,7 @@ For full documentation, visit [docs.agently.run](https://docs.agently.run).
 
 Check out the [examples](examples/) directory for complete working examples:
 
+- [Coder Agent](examples/coder_agent/README.md): A powerful AI coding assistant with Git-backed changes
 - [Multi-Plugin Agent](examples/README.md): An agent using multiple plugin sources
 
 ## Development
