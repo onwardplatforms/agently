@@ -9,14 +9,12 @@ model:
   model: "gpt-4o"
   temperature: 0.7
 
-# Unified plugin configuration
-plugins:
-  github:
+# MCP server configuration
+mcp_servers:
+  local:
     - name: "hellogoodbye"
-      type: "mcp"  # Specify this is an MCP server
-      description: "A plugin that can say hello and goodbye to users"
-      source: "onwardplatforms/agently-mcp-hellogoodbye"
-      version: "main"
-      command: "python"  # MCP-specific field
-      args:              # MCP-specific field
-        - ".agently/plugins/mcp/hellogoodbye/server.py" 
+      description: "A server that can say hello and goodbye to users"
+      source: "servers/hello_goodbye_server.py"
+      type: "mcp"
+      command: "python"
+      args: ["servers/hello_goodbye_server.py"]

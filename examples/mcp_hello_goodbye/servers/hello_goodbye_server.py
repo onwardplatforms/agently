@@ -12,7 +12,13 @@ import os
 from mcp.server.fastmcp import FastMCP
 
 # Configure logging
-logging_level = getattr(logging, os.getenv("LOG_LEVEL", "ERROR"))
+log_level_name = os.getenv("LOG_LEVEL", "ERROR")
+# Handle the NONE level specially
+if log_level_name == "NONE":
+    logging_level = logging.ERROR  # Default to ERROR if NONE is specified
+else:
+    logging_level = getattr(logging, log_level_name)
+
 logging.basicConfig(level=logging_level, format='%(message)s')
 
 # Configure specific loggers to reduce noise
