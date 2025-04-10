@@ -1,0 +1,19 @@
+{
+  "plugins": {
+    "sk": {},
+    "mcp": {
+      "modelcontextprotocol/servers": {
+        "namespace": "modelcontextprotocol",
+        "name": "servers",
+        "full_name": "modelcontextprotocol/servers",
+        "version": "main",
+        "source_type": "github",
+        "plugin_type": "mcp",
+        "repo_url": "github.com/modelcontextprotocol/servers",
+        "plugin_path": "",
+        "commit_sha": "e8f0b15f413663bac4ff47de18735586bbc38ce9",
+        "installed_at": "2025-04-10T16:11:39.818577"
+      }
+    }
+  }
+}

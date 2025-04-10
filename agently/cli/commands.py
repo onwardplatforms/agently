@@ -924,6 +924,16 @@ def _initialize_plugins(config_path, quiet=False, force=False):
             click.echo(f"\nWarning: {len(mcp_failed)} MCP servers failed to install.")
         logger.warning(f"Failed to install MCP servers: {', '.join(mcp_failed)}")
 
+    # Display plugin status summaries
+    if not quiet:
+        click.echo("\nPlugin status:")
+        click.echo(format_apply_summary(
+            len(to_add), len(to_update), len(unchanged), len(to_remove), len(failed), "plugins"))
+        
+        click.echo("\nMCP server status:")
+        click.echo(format_apply_summary(
+            len(mcp_to_add), len(mcp_to_update), len(mcp_unchanged), len(mcp_to_remove), len(mcp_failed), "MCP servers"))
+
     return installed_plugins
 
 
