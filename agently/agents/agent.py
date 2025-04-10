@@ -129,6 +129,7 @@ class Agent:
                 recovery_hint="Check configuration and model availability",
             ) from e
 
+    # TODO: See about consolidating this with _init_mcp_servers
     async def _init_plugins(self) -> None:
         """Initialize agent plugins."""
         try:
