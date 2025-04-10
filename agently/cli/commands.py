@@ -79,38 +79,31 @@ def format_plugin_status(status: PluginStatus, plugin_key: str, details: Optiona
         Formatted status message
     """
     # Color-coded status indicators
-    status_colors = {
+    status_icons = {
         PluginStatus.ADDED: styles.green("+ "),
-        PluginStatus.UPDATED: styles.yellow("~ "),
-        PluginStatus.UNCHANGED: styles.dim("- "),
+        PluginStatus.UPDATED: styles.yellow("↻ "),
+        PluginStatus.UNCHANGED: styles.dim("· "),
         PluginStatus.REMOVED: styles.red("- "),
         PluginStatus.FAILED: styles.red("✗ "),
     }
 
-    # Text for status
-    status_text = {
-        PluginStatus.ADDED: "(new)",
-        PluginStatus.UPDATED: "(updated)",
-        PluginStatus.UNCHANGED: "(unchanged)",
-        PluginStatus.REMOVED: "(removed)",
-        PluginStatus.FAILED: "(failed)",
-    }
-
-    # Type indicator
-    type_indicator = "[MCP]" if plugin_type == "mcp" else "[SK]"
-    
-    # Format output with type indicator
-    output = f"{status_colors.get(status, '')}{plugin_key} {styles.dim(type_indicator)} {styles.dim(status_text.get(status, ''))}"
-    
+    # Extract version from details if available
+    version = "latest"
     if details:
-        output += f" {styles.dim(details)}"
-        
+        if details.startswith("version="):
+            version = details.split("=")[1]
+        elif details.startswith("path="):
+            version = "local"
+    
+    # Format output with name, version, and type
+    output = f"{status_icons.get(status, '')}{plugin_key} {styles.dim(version)} {styles.dim(f'({plugin_type.upper()})')}"
+    
     return output
 
 
 def format_section_header(title: str) -> str:
     """Format a section header."""
-    return styles.bold(title) + ":"
+    return f"{styles.bold(title)}"
 
 
 def format_plan_summary(added: int, updated: int, unchanged: int, removed: int) -> str:
@@ -125,20 +118,26 @@ def format_plan_summary(added: int, updated: int, unchanged: int, removed: int) 
     Returns:
         Formatted summary
     """
-    parts = []
+    total = added + updated + unchanged + removed
+    
+    if total == 0:
+        return "No plugins found"
+    
+    # If no changes, just report the unchanged count
+    if added == 0 and updated == 0 and removed == 0:
+        return f"{styles.dim(f'• {total} plugins')} (no changes)"
+    
+    # Create a list of changes
+    changes = []
     if added > 0:
-        parts.append(f"+{added} new")
+        changes.append(f"{styles.green(f'+{added}')}")
     if updated > 0:
-        parts.append(f"~{updated} updated")
-    if unchanged > 0:
-        parts.append(f"-{unchanged} unchanged")
+        changes.append(f"{styles.yellow(f'~{updated}')}")
     if removed > 0:
-        parts.append(f"-{removed} removed")
-    
-    if not parts:
-        return "No changes"
-    
-    return f"Found {added + updated + unchanged + removed} plugins: {', '.join(parts)}"
+        changes.append(f"{styles.red(f'-{removed}')}")
+        
+    # Format the output like Terraform does
+    return f"{styles.bold(f'• {total} plugins')} ({' '.join(changes)})"
 
 
 def format_apply_summary(added: int, updated: int, unchanged: int, removed: int, failed: int = 0, prefix: str = "plugins") -> str:
@@ -156,22 +155,23 @@ def format_apply_summary(added: int, updated: int, unchanged: int, removed: int,
 
     # Special case for all items up-to-date
     if added == 0 and updated == 0 and removed == 0 and failed == 0 and unchanged > 0:
-        return f"All {prefix} ({unchanged}) are ready and up-to-date"
+        return f"{styles.green('✓')} {unchanged} {prefix} ready"
 
     parts = []
 
     if added > 0:
-        parts.append(styles.green(f"{added} added"))
+        parts.append(f"{styles.green(f'+{added}')} added")
     if updated > 0:
-        parts.append(styles.yellow(f"{updated} updated"))
+        parts.append(f"{styles.yellow(f'~{updated}')} updated")
     if unchanged > 0:
-        parts.append(styles.dim(f"{unchanged} unchanged"))
+        parts.append(f"{unchanged} unchanged")
     if removed > 0:
-        parts.append(styles.red(f"{removed} removed"))
+        parts.append(f"{styles.red(f'-{removed}')} removed")
     if failed > 0:
-        parts.append(styles.red(f"{failed} failed"))
+        parts.append(f"{styles.red(f'!{failed}')} failed")
 
-    return f"Validation complete: {total} {prefix} processed" + (", " + ", ".join(parts) if parts else "")
+    # Format in a compact way
+    return f"{styles.green('✓')} {' · '.join(parts)}"
 
 
 @click.group()
@@ -198,20 +198,30 @@ def init(log_level):
             click.echo("Error: agently.yaml not found in current directory")
             sys.exit(1)
         
-        click.echo(f"Reading configuration from {config_file}")
+        click.echo("Initializing Agently...")
+        click.echo()
         
-        # Initialize plugins and MCP servers - this will download and set up plugins
-        _initialize_plugins(config_file)
-        
+        # First step: Validate configuration
+        click.echo("Validating agent configuration...")
         # Load and validate configuration
         config = load_agent_config(config_file)
-        
-        click.echo("Validation complete!")
+        click.echo(f"{styles.green('✓')} Configuration validated")
         click.echo()
-        click.echo("Agently is ready to run")
+        
+        # Second step: Initialize plugins
+        click.echo("Initializing plugins...")
+        # Initialize plugins and MCP servers
+        plugin_stats = _initialize_plugins(config_file, quiet=False)
+        
+        # Final success message
+        click.echo()
+        click.echo(f"{styles.green('Agently has been successfully initialized!')}") 
+        click.echo()
+        click.echo("You can now run Agently with 'agently run'.")
+        click.echo("For a list of installed plugins, use 'agently list'.")
         
     except Exception as e:
-        click.echo(f"Error: {str(e)}")
+        click.echo(f"{styles.red('Error:')} {str(e)}")
         logger.exception("Error during initialization")
         sys.exit(1)
 
@@ -331,7 +341,7 @@ def _initialize_plugins(config_path, quiet=False, force=False):
         force: Force reinstallation of all plugins and MCP servers
 
     Returns:
-        Set of installed plugin keys
+        Dict with plugin statistics
 
     Raises:
         FileNotFoundError: If the configuration file does not exist
@@ -342,10 +352,7 @@ def _initialize_plugins(config_path, quiet=False, force=False):
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
     if force and not quiet:
-        click.echo("Force mode enabled: reinstalling all plugins and MCP servers")
-
-    if not quiet:
-        click.echo("Scanning plugin and MCP server dependencies...")
+        click.echo("Force mode enabled: reinstalling all plugins")
 
     # Parse YAML configuration to extract plugins and MCP servers
     try:
@@ -634,32 +641,59 @@ def _initialize_plugins(config_path, quiet=False, force=False):
     for mcp_key in lockfile_mcp_servers - config_mcp_servers:
         mcp_to_remove.add(mcp_key)
 
-    # Display plugin statuses
+    # Display plugin statuses in Terraform-like format
     total_plugins = len(to_add) + len(to_update) + len(unchanged) + len(to_remove)
     total_mcp_plugins = len(mcp_to_add) + len(mcp_to_update) + len(mcp_unchanged) + len(mcp_to_remove)
-    
-    if total_plugins + total_mcp_plugins > 0:
-        if total_plugins > 0:
-            logger.info(f"--- Semantic Kernel Plugins ---")
-            for plugin_key in to_add:
-                logger.info(format_plugin_status(PluginStatus.ADDED, plugin_key, plugin_details.get(plugin_key, ""), plugin_type="sk"))
-            for plugin_key in to_update:
-                logger.info(format_plugin_status(PluginStatus.UPDATED, plugin_key, plugin_details.get(plugin_key, ""), plugin_type="sk"))
-            for plugin_key in unchanged:
-                logger.info(format_plugin_status(PluginStatus.UNCHANGED, plugin_key, plugin_details.get(plugin_key, ""), plugin_type="sk"))
-            for plugin_key in to_remove:
-                logger.info(format_plugin_status(PluginStatus.REMOVED, plugin_key, plugin_details.get(plugin_key, ""), plugin_type="sk"))
+
+    if not quiet:
+        # Show SK plugin changes
+        sk_changes = len(to_add) + len(to_update) + len(to_remove) > 0
+        if sk_changes:
+            # Show additions first
+            for plugin_key in sorted(to_add):
+                version = plugin_details.get(plugin_key, "").replace("version=", "")
+                click.echo(f"- Finding {plugin_key} versions matching \"{version}\"...")
+                click.echo(f"- Installing {plugin_key} {version}...")
+                
+            # Then show updates
+            for plugin_key in sorted(to_update):
+                version = plugin_details.get(plugin_key, "").replace("version=", "")
+                if "path=" in plugin_details.get(plugin_key, ""):
+                    click.echo(f"- Updating {plugin_key} from local path...")
+                else:
+                    click.echo(f"- Updating {plugin_key} to {version}...")
+                
+            # Then show removals
+            for plugin_key in sorted(to_remove):
+                click.echo(f"- Removing {plugin_key}...")
         
-        if total_mcp_plugins > 0:
-            logger.info(f"--- MCP Plugins ---")
-            for plugin_key in mcp_to_add:
-                logger.info(format_plugin_status(PluginStatus.ADDED, plugin_key, mcp_server_details.get(plugin_key, ""), plugin_type="mcp"))
-            for plugin_key in mcp_to_update:
-                logger.info(format_plugin_status(PluginStatus.UPDATED, plugin_key, mcp_server_details.get(plugin_key, ""), plugin_type="mcp"))
-            for plugin_key in mcp_unchanged:
-                logger.info(format_plugin_status(PluginStatus.UNCHANGED, plugin_key, mcp_server_details.get(plugin_key, ""), plugin_type="mcp"))
-            for plugin_key in mcp_to_remove:
-                logger.info(format_plugin_status(PluginStatus.REMOVED, plugin_key, mcp_server_details.get(plugin_key, ""), plugin_type="mcp"))
+        # Show MCP plugin changes
+        mcp_changes = len(mcp_to_add) + len(mcp_to_update) + len(mcp_to_remove) > 0
+        if mcp_changes:
+            # Show additions first
+            for plugin_key in sorted(mcp_to_add):
+                version = mcp_server_details.get(plugin_key, "").replace("version=", "")
+                click.echo(f"- Finding {plugin_key} MCP versions matching \"{version}\"...")
+                click.echo(f"- Installing {plugin_key} {styles.dim('(MCP)')} {version}...")
+                
+            # Then show updates
+            for plugin_key in sorted(mcp_to_update):
+                version = mcp_server_details.get(plugin_key, "").replace("version=", "")
+                if "path=" in mcp_server_details.get(plugin_key, ""):
+                    click.echo(f"- Updating {plugin_key} {styles.dim('(MCP)')} from local path...")
+                else:
+                    click.echo(f"- Updating {plugin_key} {styles.dim('(MCP)')} to {version}...")
+                
+            # Then show removals
+            for plugin_key in sorted(mcp_to_remove):
+                click.echo(f"- Removing {plugin_key} {styles.dim('(MCP)')}...")
+        
+        # Show a message if no changes
+        if not sk_changes and not mcp_changes and (total_plugins > 0 or total_mcp_plugins > 0):
+            if total_plugins + total_mcp_plugins > 0:
+                click.echo("- All plugins are up-to-date")
+            else:
+                click.echo("- No plugins configured")
 
     # Now perform the actual installation
 
@@ -702,12 +736,12 @@ def _initialize_plugins(config_path, quiet=False, force=False):
             else:
                 lockfile["plugins"]["sk"][plugin_key] = plugin_info
 
-            # Plugins are loaded silently since the status is already shown
+            # Plugins are loaded silently
         except Exception as e:
             logger.error(f"Failed to install GitHub plugin {repo_url}: {e}")
             failed.add(plugin_key)
             if not quiet:
-                click.echo(format_plugin_status(PluginStatus.FAILED, plugin_key, str(e), plugin_type="sk"))
+                click.echo(f"{styles.red('✗')} Failed to install {plugin_key}: {e}")
 
     # Install local plugins
     for local_plugin_config in local_plugins:
@@ -746,12 +780,12 @@ def _initialize_plugins(config_path, quiet=False, force=False):
             else:
                 lockfile["plugins"]["sk"][plugin_key] = plugin_info
 
-            # Plugins are loaded silently since the status is already shown
+            # Plugins are loaded silently
         except Exception as e:
             logger.error(f"Failed to install local plugin {source_path}: {e}")
             failed.add(plugin_key)
             if not quiet:
-                click.echo(format_plugin_status(PluginStatus.FAILED, plugin_key, str(e), plugin_type="sk"))
+                click.echo(f"{styles.red('✗')} Failed to install {plugin_key}: {e}")
 
     # Install GitHub MCP servers
     for github_mcp_config in github_mcp_servers:
@@ -822,12 +856,12 @@ def _initialize_plugins(config_path, quiet=False, force=False):
             else:
                 lockfile["plugins"]["sk"][mcp_key] = mcp_info
 
-            # MCP servers are installed silently since the status is already shown
+            # MCP servers are installed silently
         except Exception as e:
             logger.error(f"Failed to install GitHub MCP server {repo_url}: {e}")
             mcp_failed.add(mcp_key)
             if not quiet:
-                click.echo(format_plugin_status(PluginStatus.FAILED, mcp_key, str(e), plugin_type="mcp"))
+                click.echo(f"{styles.red('✗')} Failed to install MCP {mcp_key}: {e}")
 
     # Install local MCP servers
     for local_mcp_config in local_mcp_servers:
@@ -892,21 +926,21 @@ def _initialize_plugins(config_path, quiet=False, force=False):
             else:
                 lockfile["plugins"]["sk"][mcp_key] = mcp_info
             
-            # MCP servers are installed silently since the status is already shown
+            # MCP servers are installed silently
         except Exception as e:
             logger.error(f"Failed to install local MCP server {name}: {e}")
             mcp_failed.add(mcp_key)
             if not quiet:
-                click.echo(format_plugin_status(PluginStatus.FAILED, mcp_key, str(e), plugin_type="mcp"))
+                click.echo(f"{styles.red('✗')} Failed to install MCP {mcp_key}: {e}")
 
     # Remove plugins that are no longer in the config
     for plugin_key in to_remove:
-        # Plugins are removed silently since the status is already shown
+        # Plugins are removed silently
         lockfile["plugins"]["sk"].pop(plugin_key, None)
     
     # Remove MCP servers that are no longer in the config
     for mcp_key in mcp_to_remove:
-        # MCP servers are removed silently since the status is already shown
+        # MCP servers are removed silently
         lockfile["plugins"]["mcp"].pop(mcp_key, None)
 
     # Write updated lockfile
@@ -914,27 +948,71 @@ def _initialize_plugins(config_path, quiet=False, force=False):
         json.dump(lockfile, f, indent=2)
 
     # Check if there were any failures
-    if failed:
-        if not quiet:
-            click.echo(f"\nWarning: {len(failed)} plugins failed to install.")
+    if failed and not quiet:
+        click.echo(f"\n{styles.red('Warning:')} {len(failed)} plugins failed to install")
         logger.warning(f"Failed to install plugins: {', '.join(failed)}")
     
-    if mcp_failed:
-        if not quiet:
-            click.echo(f"\nWarning: {len(mcp_failed)} MCP servers failed to install.")
+    if mcp_failed and not quiet:
+        click.echo(f"\n{styles.red('Warning:')} {len(mcp_failed)} MCP servers failed to install")
         logger.warning(f"Failed to install MCP servers: {', '.join(mcp_failed)}")
 
-    # Display plugin status summaries
+    # Display plugin summary
     if not quiet:
-        click.echo("\nPlugin status:")
-        click.echo(format_apply_summary(
-            len(to_add), len(to_update), len(unchanged), len(to_remove), len(failed), "plugins"))
+        # Log plugin counts for debugging
+        logger.debug(f"SK plugins: {len(lockfile['plugins']['sk'])}, MCP plugins: {len(lockfile['plugins']['mcp'])}")
+        for sk_key in lockfile['plugins']['sk']:
+            logger.debug(f"Found SK plugin: {sk_key}")
+        for mcp_key in lockfile['plugins']['mcp']:
+            logger.debug(f"Found MCP plugin: {mcp_key}")
+            
+        # Always show summary of installed plugins, regardless of whether there were changes
+        click.echo("\nAgently has loaded the following plugins:")
         
-        click.echo("\nMCP server status:")
-        click.echo(format_apply_summary(
-            len(mcp_to_add), len(mcp_to_update), len(mcp_unchanged), len(mcp_to_remove), len(mcp_failed), "MCP servers"))
+        # Count all installed plugins
+        sk_plugin_count = len(lockfile["plugins"]["sk"])
+        mcp_plugin_count = len(lockfile["plugins"]["mcp"])
+        
+        # Debug output
+        if sk_plugin_count == 0 and mcp_plugin_count == 0:
+            logger.debug("No plugins found in lockfile")
+            
+        # Show SK plugins
+        if sk_plugin_count > 0:
+            click.echo(f"{styles.green('✓')} {sk_plugin_count} Agently plugin{'s' if sk_plugin_count != 1 else ''}")
+            for plugin_key, plugin_info in lockfile["plugins"]["sk"].items():
+                version = plugin_info.get("version", "latest")
+                click.echo(f"  - {plugin_key} {styles.dim(version)}")
+        
+        # Show MCP plugins
+        if mcp_plugin_count > 0:
+            click.echo(f"{styles.green('✓')} {mcp_plugin_count} MCP plugin{'s' if mcp_plugin_count != 1 else ''}")
+            for plugin_key, plugin_info in lockfile["plugins"]["mcp"].items():
+                version = plugin_info.get("version", "latest")
+                click.echo(f"  - {plugin_key} {styles.dim(version)} {styles.dim('(MCP)')}")
+        
+        # Show placeholder if no plugins installed
+        if sk_plugin_count == 0 and mcp_plugin_count == 0:
+            click.echo(f"{styles.dim('i')} No plugins installed")
 
-    return installed_plugins
+    # Return statistics for testing and for the init command 
+    return {
+        "sk_plugins": {
+            "added": len(to_add),
+            "updated": len(to_update),
+            "unchanged": len(unchanged),
+            "removed": len(to_remove),
+            "failed": len(failed),
+            "total": len(lockfile["plugins"]["sk"])
+        },
+        "mcp_plugins": {
+            "added": len(mcp_to_add),
+            "updated": len(mcp_to_update),
+            "unchanged": len(mcp_unchanged),
+            "removed": len(mcp_to_remove),
+            "failed": len(mcp_failed),
+            "total": len(lockfile["plugins"]["mcp"])
+        }
+    }
 
 
 def interactive_loop_with_reasoning(agent, config, context):

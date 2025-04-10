@@ -12,4 +12,4 @@ plugins:
       type: "mcp"
       version: "main"
       command: "uvx"
-      args: ["mcp-server-git", "--repository", "/Users/justinoconnor/Code/onward/agently/examples/git_mcp_example"] 
+      args: ["mcp-server-git", "--repository", "/Users/justinoconnor/Code/onward/agently"] 
