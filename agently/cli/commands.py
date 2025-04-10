@@ -177,11 +177,20 @@ def format_apply_summary(added: int, updated: int, unchanged: int, removed: int,
 @click.group()
 def cli():
     """agently.run - Declarative AI agents without code."""
+    # Default to no logging unless explicitly requested
+    configure_logging(level=LogLevel.NONE)
 
 
 @cli.command(help="Initialize agent and dependencies")
-def init():
+@click.option('--log-level', type=click.Choice(['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL', 'NONE'], case_sensitive=False), 
+              help="Set the logging level. Overrides the LOG_LEVEL environment variable.")
+def init(log_level):
     """Initialize agent and dependencies."""
+    # Configure logging if specified via CLI
+    if log_level:
+        level = getattr(LogLevel, log_level.upper())
+        configure_logging(level=level)
+        
     try:
         # Load configuration
         config_file = Path("agently.yaml")
@@ -208,8 +217,15 @@ def init():
 
 
 @cli.command(help="Run agent in REPL mode")
-def run():
+@click.option('--log-level', type=click.Choice(['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL', 'NONE'], case_sensitive=False), 
+              help="Set the logging level. Overrides the LOG_LEVEL environment variable.")
+def run(log_level):
     """Run agent in REPL mode."""
+    # Configure logging if specified via CLI
+    if log_level:
+        level = getattr(LogLevel, log_level.upper())
+        configure_logging(level=level)
+        
     try:
         # Load configuration
         config_file = Path("agently.yaml")
@@ -232,11 +248,16 @@ def run():
 
 
 @cli.command()
-def list():
+@click.option('--log-level', type=click.Choice(['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL', 'NONE'], case_sensitive=False), 
+              help="Set the logging level. Overrides the LOG_LEVEL environment variable.")
+def list(log_level):
     """List installed plugins and MCP servers."""
-    # Use the centralized logging configuration
-    # The LOG_LEVEL environment variable will be respected
-    configure_logging()
+    # Configure logging with INFO by default for this command since it's read-only
+    if log_level:
+        level = getattr(LogLevel, log_level.upper())
+        configure_logging(level=level)
+    else:
+        configure_logging(level=LogLevel.INFO)
 
     try:
         # Determine lockfile path (at the same level as .agently folder)
