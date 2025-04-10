@@ -1,21 +1,19 @@
 {
-  "plugins": {},
-  "mcp_servers": {
-    "local/HelloGoodbye": {
-      "namespace": "local",
-      "name": "HelloGoodbye",
-      "full_name": "HelloGoodbye",
-      "version": "local",
-      "source_type": "local",
-      "source_path": "",
-      "command": "python",
-      "args": [
-        "servers/hello_goodbye_server.py"
-      ],
-      "description": "A plugin that can say hello and goodbye to users",
-      "variables": {},
-      "sha256": "",
-      "installed_at": "2025-04-09T03:12:58.069637"
+  "plugins": {
+    "sk": {},
+    "mcp": {
+      "onwardplatforms/hellogoodbye": {
+        "namespace": "onwardplatforms",
+        "name": "hellogoodbye",
+        "full_name": "onwardplatforms/hellogoodbye",
+        "version": "main",
+        "source_type": "github",
+        "plugin_type": "mcp",
+        "repo_url": "github.com/onwardplatforms/agently-mcp-hellogoodbye",
+        "plugin_path": "",
+        "commit_sha": "4396bf0605ceafbe2d0588866fc0edd20583565e",
+        "installed_at": "2025-04-10T03:05:29.764848"
+      }
     }
   }
 }

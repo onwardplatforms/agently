@@ -158,34 +158,94 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
 
     # Create plugin configs
     plugin_configs = []
+    
+    # Create MCP server configs
+    mcp_server_configs = []
 
     # Process plugins by type
     plugins_yaml = yaml_config.get("plugins", {})
 
     # Process local plugins
     for local_plugin in plugins_yaml.get("local", []):
+        # Determine plugin type (sk or mcp)
+        plugin_type = local_plugin.get("type", "sk")  # Default to "sk" if not specified
+        
         # Resolve relative path from config file location
         plugin_path = local_plugin["source"]
         if not os.path.isabs(plugin_path):
             plugin_path = (config_path.parent / plugin_path).resolve()
 
-        local_source: PluginSourceType = LocalPluginSource(Path(plugin_path))
-        plugin_configs.append(PluginConfig(source=local_source, variables=local_plugin.get("variables", {})))
+        local_source: PluginSourceType = LocalPluginSource(
+            path=Path(plugin_path),
+            plugin_type=plugin_type  # Set the plugin type
+        )
+        
+        # For MCP type plugins, handle MCP-specific fields
+        if plugin_type == "mcp":
+            # Create both a plugin config and an MCP server config
+            if "command" in local_plugin and "args" in local_plugin:
+                # Get the source object's name for the MCP server
+                name = local_plugin.get("name", Path(plugin_path).stem)
+                
+                mcp_server_configs.append(
+                    MCPServerConfig(
+                        name=name,
+                        command=local_plugin["command"],
+                        args=local_plugin.get("args", []),
+                        description=local_plugin.get("description", ""),
+                        variables=local_plugin.get("variables", {}),
+                        source_type="local",
+                        source_path=str(plugin_path),
+                    )
+                )
+                
+                # Also add to plugin_configs for initialization
+                plugin_configs.append(PluginConfig(source=local_source, variables=local_plugin.get("variables", {})))
+        else:
+            # For non-MCP plugins, just add them to plugin_configs
+            plugin_configs.append(PluginConfig(source=local_source, variables=local_plugin.get("variables", {})))
 
     # Process GitHub plugins
     for github_plugin in plugins_yaml.get("github", []):
+        # Determine plugin type (sk or mcp)
+        plugin_type = github_plugin.get("type", "sk")  # Default to "sk" if not specified
+        
         github_source: PluginSourceType = GitHubPluginSource(
             repo_url=github_plugin["source"],
             version=github_plugin.get("version", "main"),  # Default to main if not specified
             plugin_path=github_plugin.get("plugin_path", ""),
             namespace=github_plugin.get("namespace", ""),
             name=github_plugin.get("name", ""),
+            plugin_type=plugin_type,  # Set the plugin type
         )
-        plugin_configs.append(PluginConfig(source=github_source, variables=github_plugin.get("variables", {})))
+        
+        # For MCP type plugins, handle MCP-specific fields
+        if plugin_type == "mcp":
+            # Create both a plugin config and an MCP server config
+            if "command" in github_plugin and "args" in github_plugin:
+                # Get the source object's namespace and name for the MCP server
+                name = github_source.name
+                
+                mcp_server_configs.append(
+                    MCPServerConfig(
+                        name=name,
+                        command=github_plugin["command"],
+                        args=github_plugin.get("args", []),
+                        description=github_plugin.get("description", ""),
+                        variables=github_plugin.get("variables", {}),
+                        source_type="github",
+                        repo_url=github_plugin["source"],
+                        version=github_plugin.get("version", "main"),
+                        server_path=github_plugin.get("server_path", "") or github_plugin.get("plugin_path", ""),
+                    )
+                )
+                
+                # Also add to plugin_configs for initialization
+                plugin_configs.append(PluginConfig(source=github_source, variables=github_plugin.get("variables", {})))
+        else:
+            # For non-MCP plugins, just add them to plugin_configs
+            plugin_configs.append(PluginConfig(source=github_source, variables=github_plugin.get("variables", {})))
 
-    # Create MCP server configs
-    mcp_server_configs = []
-    
     # Process MCP servers by type
     mcp_servers_yaml = yaml_config.get("mcp_servers", {})
     

@@ -6,14 +6,17 @@ system_prompt: "You are a friendly assistant that helps users test the Hello-Goo
 
 model:
   provider: "openai"
-  model: "gpt-3.5-turbo"
+  model: "gpt-4o"
   temperature: 0.7
 
-# MCP server configuration
-mcp_servers:
-  local:
-    - name: "HelloGoodbye"
+# Unified plugin configuration
+plugins:
+  github:
+    - name: "hellogoodbye"
+      type: "mcp"  # Specify this is an MCP server
       description: "A plugin that can say hello and goodbye to users"
-      command: "python"
-      args:
-        - "servers/hello_goodbye_server.py" 
+      source: "onwardplatforms/agently-mcp-hellogoodbye"
+      version: "main"
+      command: "python"  # MCP-specific field
+      args:              # MCP-specific field
+        - ".agently/plugins/mcp/hellogoodbye/server.py" 

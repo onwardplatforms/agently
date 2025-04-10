@@ -1,15 +1,19 @@
 {
   "plugins": {
-    "onwardplatforms/hello": {
-      "namespace": "onwardplatforms",
-      "name": "hello",
-      "full_name": "onwardplatforms/hello",
-      "version": "main",
-      "source_type": "github",
-      "repo_url": "github.com/onwardplatforms/agently-plugin-hello",
-      "plugin_path": "",
-      "commit_sha": "58ed33953eb4a59090588a27c0aee413fe604f7b",
-      "installed_at": "2025-03-02T03:44:23.532984"
-    }
+    "sk": {
+      "onwardplatforms/hello": {
+        "namespace": "onwardplatforms",
+        "name": "hello",
+        "full_name": "onwardplatforms/hello",
+        "version": "main",
+        "source_type": "github",
+        "plugin_type": "sk",
+        "repo_url": "github.com/onwardplatforms/agently-plugin-hello",
+        "plugin_path": "",
+        "commit_sha": "58ed33953eb4a59090588a27c0aee413fe604f7b",
+        "installed_at": "2025-04-10T03:08:19.075014"
+      }
+    },
+    "mcp": {}
   }
 }
