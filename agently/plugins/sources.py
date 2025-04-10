@@ -61,7 +61,7 @@ class PluginSource(ABC):
         """
         try:
             logger.info(f"Checking if plugin {self.name} needs update (lockfile_sha: {lockfile_sha})")
-            
+
             # If force_reinstall is True, always update
             if self.force_reinstall:
                 logger.debug(f"Force reinstall enabled for {self.name}")
@@ -79,11 +79,11 @@ class PluginSource(ABC):
             # For Git repositories, check commit SHA
             git_dir = plugin_dir / ".git"
             logger.info(f"Git directory: {git_dir}, exists: {git_dir.exists()}")
-            
+
             if git_dir.exists():
                 current_sha = self._get_repo_sha(plugin_dir)
                 logger.info(f"Current SHA: {current_sha}")
-                
+
                 if not current_sha:
                     logger.warning(f"Could not get commit SHA for {self.name}")
                     return True
@@ -95,12 +95,12 @@ class PluginSource(ABC):
                 if current_sha != lockfile_sha:
                     logger.debug(f"SHA mismatch for {self.name}: {current_sha} != {lockfile_sha}")
                     return True
-                
+
                 logger.info(f"SHAs match, no update needed for {self.name}")
                 return False
             else:
                 # For local plugins, check file hash if lockfile has a SHA
-                logger.info(f"Not a git repository, treating as local plugin")
+                logger.info("Not a git repository, treating as local plugin")
                 if lockfile_sha:
                     current_sha = self._calculate_plugin_sha()
                     logger.info(f"Calculated SHA: {current_sha}")
@@ -385,7 +385,7 @@ class GitHubPluginSource(PluginSource):
         """Set up the cache directory and extract namespace/name if not provided."""
         # Initialize full_repo_name to ensure it always exists
         self.full_repo_name = ""
-        
+
         # Set default cache directory based on plugin type
         if self.cache_dir is None:
             self.cache_dir = Path.cwd() / ".agently" / "plugins" / self.plugin_type
@@ -417,7 +417,7 @@ class GitHubPluginSource(PluginSource):
 
                 # Extract repo name
                 repo_name = match.group(2)
-                
+
                 # Store original repo name
                 original_repo_name = repo_name
 
@@ -426,10 +426,10 @@ class GitHubPluginSource(PluginSource):
                     if self.plugin_type == "mcp":
                         # For MCP servers, use the repo name as-is for full_repo_name
                         self.full_repo_name = repo_name
-                        
+
                         # Remove MCP prefix if present for storage name
                         if repo_name.startswith(self.MCP_PREFIX):
-                            self.name = repo_name[len(self.MCP_PREFIX):]
+                            self.name = repo_name[len(self.MCP_PREFIX) :]
                         else:
                             self.name = repo_name
                     else:
@@ -441,7 +441,7 @@ class GitHubPluginSource(PluginSource):
                             self.name = repo_name
                         else:
                             # If it already has the prefix, strip it for storage
-                            self.name = repo_name[len(self.PLUGIN_PREFIX):]
+                            self.name = repo_name[len(self.PLUGIN_PREFIX) :]
                             self.full_repo_name = repo_name
 
                 # Update repo_url to ensure it has the correct format
@@ -570,22 +570,22 @@ class GitHubPluginSource(PluginSource):
             # for MCP servers. This serves as a placeholder until actual
             # MCP server integration is handled by the agent.
             from agently.plugins.base import Plugin
-            
+
             class MCPServerPlugin(Plugin):
                 """Placeholder for MCP server plugin."""
-                
+
                 name = self.name
                 description = "MCP Server plugin"
                 namespace = self.namespace
                 plugin_instructions = "This plugin provides access to an MCP server."
-                
+
                 @classmethod
                 def get_kernel_functions(cls):
                     """Return an empty dictionary since the actual functions are provided by the MCP server."""
                     return {}
-            
+
             return MCPServerPlugin
-            
+
         # Determine plugin module path within the repository
         if self.plugin_path:
             # Specific plugin path provided (can be a file or directory)
@@ -657,20 +657,15 @@ class GitHubPluginSource(PluginSource):
 
                 logger.info(f"Force reinstall enabled, removing existing directory: {cache_path}")
                 shutil.rmtree(cache_path)
-            
+
             # Check if the directory exists and is a git repository
             if cache_path.exists():
                 if (cache_path / ".git").exists():
                     # It's a git repository, update it
                     logger.info(f"Repository already exists, updating from remote: {cache_path}")
                     # Fetch the latest changes
-                    subprocess.run(
-                        ["git", "fetch", "origin"], 
-                        cwd=cache_path, 
-                        check=True, 
-                        capture_output=True
-                    )
-                    
+                    subprocess.run(["git", "fetch", "origin"], cwd=cache_path, check=True, capture_output=True)
+
                     # Check out the specified version/branch/tag
                     self._checkout_version(cache_path)
                     return
@@ -681,6 +676,7 @@ class GitHubPluginSource(PluginSource):
                 else:
                     # Directory exists but is not a git repository, remove it and clone
                     import shutil
+
                     logger.debug(f"Directory exists but is not a git repository, removing: {cache_path}")
                     shutil.rmtree(cache_path)
 
@@ -700,17 +696,19 @@ class GitHubPluginSource(PluginSource):
 
             # Check out the specified version/branch/tag
             self._checkout_version(cache_path)
-            
+
             logger.info(f"Repository cloned successfully to {cache_path}")
-            
+
         except subprocess.CalledProcessError as e:
-            error_msg = f"Failed to clone or checkout repository: {e.stderr.decode('utf-8') if hasattr(e, 'stderr') else str(e)}"
+            error_msg = (
+                f"Failed to clone or checkout repository: {e.stderr.decode('utf-8') if hasattr(e, 'stderr') else str(e)}"
+            )
             logger.error(error_msg)
             raise RuntimeError(f"Failed to clone repository {self.repo_url} at {self.version}: {error_msg}")
         except Exception as e:
             logger.error(f"Error during repository clone or update: {e}")
             raise RuntimeError(f"Failed to clone repository {self.repo_url} at {self.version}: {e}")
-            
+
     def _checkout_version(self, repo_path: Path) -> None:
         """Check out the specified version (branch, tag, or commit)."""
         try:
@@ -721,7 +719,7 @@ class GitHubPluginSource(PluginSource):
                 capture_output=True,
                 text=True,
             )
-            
+
             # If the checkout failed and the version doesn't start with 'v',
             # try adding 'v' prefix (common for version tags)
             if result.returncode != 0 and not self.version.startswith("v"):
@@ -733,7 +731,7 @@ class GitHubPluginSource(PluginSource):
                     capture_output=True,
                     text=True,
                 )
-                
+
             # If both checkout attempts failed, try to pull the latest changes
             if result.returncode != 0:
                 logger.warning(f"Failed to checkout {self.version}, pulling latest changes")
@@ -743,11 +741,11 @@ class GitHubPluginSource(PluginSource):
                     check=True,
                     capture_output=True,
                 )
-                
+
             # Log success if it worked
             if result.returncode == 0:
                 logger.info(f"Successfully checked out {self.version}")
-                
+
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to checkout version: {e}")
             raise RuntimeError(f"Failed to checkout version {self.version}: {e}")

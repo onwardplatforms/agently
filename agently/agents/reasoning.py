@@ -17,7 +17,7 @@ class MessageType(Enum):
 
     REASONING = "reasoning"  # Intermediate reasoning/thinking
     TOOL_CALL = "tool_call"  # Function/tool call
-    RESPONSE = "response"    # Final response to user
+    RESPONSE = "response"  # Final response to user
 
 
 class ReasoningStep:
@@ -91,9 +91,7 @@ class ReasoningChain:
             )
             self.current_reasoning = ""
 
-    def add_tool_call(
-        self, tool_name: str, tool_input: Dict[str, Any], tool_result: Any
-    ) -> None:
+    def add_tool_call(self, tool_name: str, tool_input: Dict[str, Any], tool_result: Any) -> None:
         """Add a tool call step to the chain.
 
         Args:
@@ -103,7 +101,7 @@ class ReasoningChain:
         """
         # Finalize any accumulated reasoning first
         self.finalize_reasoning()
-        
+
         self.steps.append(
             ReasoningStep(
                 message_type=MessageType.TOOL_CALL,
@@ -122,7 +120,7 @@ class ReasoningChain:
         """
         # Finalize any accumulated reasoning first
         self.finalize_reasoning()
-        
+
         self.steps.append(
             ReasoningStep(
                 message_type=MessageType.RESPONSE,
@@ -169,4 +167,4 @@ def extract_tool_calls_and_reasoning(
     # In a real implementation, this would parse the model's output
     # and extract tool calls and reasoning based on some convention
     # For example, tool calls might be marked with special syntax
-    return [], message_content 
+    return [], message_content
