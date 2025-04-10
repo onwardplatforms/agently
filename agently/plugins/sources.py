@@ -7,7 +7,7 @@ import re
 import subprocess
 import sys
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional, Type, cast
 
@@ -30,6 +30,9 @@ class PluginClass(Protocol):
 class PluginSource(ABC):
     """Base class for plugin sources."""
 
+    name: str = field(default="")
+    force_reinstall: bool = field(default=False)
+
     @abstractmethod
     def load(self) -> Type[Plugin]:
         """Load the plugin class from this source.
@@ -50,6 +53,22 @@ class PluginSource(ABC):
             A string representation of the current SHA, or empty string if unavailable
         """
 
+    @abstractmethod
+    def _get_cache_path(self) -> Path:
+        """Get the path where this plugin should be cached.
+
+        Returns:
+            Path to the cache directory for this plugin
+        """
+
+    @abstractmethod
+    def _calculate_plugin_sha(self) -> str:
+        """Calculate a SHA for the plugin.
+
+        Returns:
+            A SHA string representing the plugin's current state
+        """
+
     def needs_update(self, lockfile_sha: str) -> bool:
         """Check if the plugin needs to be updated based on lockfile SHA.
 
@@ -61,6 +80,8 @@ class PluginSource(ABC):
         """
         try:
             logger.info(f"Checking if plugin {self.name} needs update (lockfile_sha: {lockfile_sha})")
+            logger.info(f"Plugin type: {getattr(self, 'plugin_type', 'unknown')}")
+            logger.info(f"Path: {getattr(self, 'path', 'unknown')}")
 
             # If force_reinstall is True, always update
             if self.force_reinstall:
@@ -81,7 +102,7 @@ class PluginSource(ABC):
             logger.info(f"Git directory: {git_dir}, exists: {git_dir.exists()}")
 
             if git_dir.exists():
-                current_sha = self._get_repo_sha(plugin_dir)
+                current_sha = self._get_current_sha()
                 logger.info(f"Current SHA: {current_sha}")
 
                 if not current_sha:
@@ -104,12 +125,25 @@ class PluginSource(ABC):
                 if lockfile_sha:
                     current_sha = self._calculate_plugin_sha()
                     logger.info(f"Calculated SHA: {current_sha}")
-                    if not current_sha or current_sha != lockfile_sha:
-                        logger.debug(f"Local SHA mismatch for {self.name}")
+                    logger.info(f"Lockfile SHA: {lockfile_sha}")
+                    logger.info(f"SHA match? {current_sha == lockfile_sha}")
+                    
+                    if not current_sha:
+                        logger.debug(f"Failed to calculate SHA for {self.name}")
                         return True
+                    if current_sha != lockfile_sha:
+                        logger.debug(f"Local SHA mismatch for {self.name}: {current_sha} != {lockfile_sha}")
+                        return True
+                    # If SHA matches, no update needed
+                    logger.info(f"Local plugin SHA matches, no update needed for {self.name}")
+                    return False
+                else:
+                    # If no lockfile SHA is provided, we need to update to generate one
+                    logger.debug(f"No lockfile SHA for local plugin {self.name}, updating to generate one")
+                    return True
 
-            # No update needed
-            logger.info(f"No update needed for {self.name}")
+            # Default fallback - no update needed if we get to this point
+            logger.info(f"No update criteria matched, assuming no update needed for {self.name}")
             return False
         except Exception as e:
             logger.warning(f"Error checking if plugin needs update: {e}")
@@ -117,19 +151,25 @@ class PluginSource(ABC):
             return True
 
 
-@dataclass
 class LocalPluginSource(PluginSource):
     """A plugin source from the local filesystem."""
 
-    path: Path
-    namespace: str = "local"  # Default namespace for local plugins
-    name: str = ""  # Optional name override, defaults to directory name
-    force_reinstall: bool = False  # Whether to force reinstallation
-    plugin_type: str = "sk"  # Type of plugin: "sk" or "mcp"
-    cache_dir: Optional[Path] = None
+    def __init__(
+        self,
+        path: Path,
+        name: str = "",
+        force_reinstall: bool = False,
+        namespace: str = "local",
+        plugin_type: str = "sk",
+        cache_dir: Optional[Path] = None,
+    ):
+        """Initialize a local plugin source."""
+        super().__init__(name=name, force_reinstall=force_reinstall)
+        self.path = path
+        self.namespace = namespace
+        self.plugin_type = plugin_type
+        self.cache_dir = cache_dir
 
-    def __post_init__(self):
-        """Set up the cache directory based on plugin type."""
         # Set default cache directory based on plugin type
         if self.cache_dir is None:
             self.cache_dir = Path.cwd() / ".agently" / "plugins" / self.plugin_type
@@ -141,6 +181,15 @@ class LocalPluginSource(PluginSource):
             SHA calculated from the plugin files
         """
         return self._calculate_plugin_sha()
+
+    def _get_cache_path(self) -> Path:
+        """Get the path where this plugin should be cached.
+
+        Returns:
+            Path to the cache directory for this plugin
+        """
+        # For local plugins, the cache path is the actual plugin path, not a cache directory
+        return self.path
 
     def load(self) -> Type[Plugin]:
         """Load a plugin from a local path.
@@ -186,9 +235,12 @@ class LocalPluginSource(PluginSource):
                     # Get the plugin key
                     plugin_key = f"{self.namespace}/{plugin_name}"
 
+                    # Determine where to check based on plugin type
+                    target_section = "mcp" if self.plugin_type == "mcp" else "sk"
+
                     # Check if the plugin exists in the lockfile and get its SHA
-                    if plugin_key in lockfile.get("plugins", {}):
-                        lockfile_sha = lockfile["plugins"][plugin_key].get("sha", "")
+                    if plugin_key in lockfile.get("plugins", {}).get(target_section, {}):
+                        lockfile_sha = lockfile["plugins"][target_section][plugin_key].get("sha", "")
 
                         # If the SHA has changed, we should reinstall
                         if lockfile_sha and lockfile_sha != current_sha:
@@ -358,31 +410,39 @@ class LocalPluginSource(PluginSource):
             "source_type": "local",
             "plugin_type": self.plugin_type,  # Store plugin type (sk or mcp)
             "source_path": str(self.path),
-            "sha256": plugin_sha,  # Store SHA for change detection
+            "sha": plugin_sha,  # Store SHA for change detection
             "installed_at": current_time,  # Use ISO format timestamp for consistency
         }
 
 
-@dataclass
 class GitHubPluginSource(PluginSource):
     """A plugin source from a GitHub repository."""
-
-    repo_url: str
-    version: str = "main"  # Default to main branch if not specified
-    plugin_path: str = ""  # Path within repo to the plugin (empty for root)
-    namespace: str = ""  # User or organization name (extracted from repo_url if empty)
-    name: str = ""  # Repository name (extracted from repo_url if empty)
-    cache_dir: Optional[Path] = None
-    force_reinstall: bool = False  # Whether to force reinstallation
-    plugin_type: str = "sk"  # Type of plugin: "sk" or "mcp"
 
     # Plugin prefix standard
     PLUGIN_PREFIX = "agently-plugin-"
     # MCP prefix standard
     MCP_PREFIX = "agently-mcp-"
 
-    def __post_init__(self):
-        """Set up the cache directory and extract namespace/name if not provided."""
+    def __init__(
+        self,
+        repo_url: str,
+        name: str = "",
+        force_reinstall: bool = False,
+        plugin_path: str = "",
+        namespace: str = "",
+        version: str = "main",
+        cache_dir: Optional[Path] = None,
+        plugin_type: str = "sk",
+    ):
+        """Initialize a GitHub plugin source."""
+        super().__init__(name=name, force_reinstall=force_reinstall)
+        self.repo_url = repo_url
+        self.plugin_path = plugin_path
+        self.namespace = namespace
+        self.version = version
+        self.cache_dir = cache_dir
+        self.plugin_type = plugin_type
+
         # Initialize full_repo_name to ensure it always exists
         self.full_repo_name = ""
 
@@ -514,7 +574,7 @@ class GitHubPluginSource(PluginSource):
             "plugin_type": self.plugin_type,  # Store plugin type (sk or mcp)
             "repo_url": self.repo_url,
             "plugin_path": self.plugin_path,
-            "commit_sha": commit_sha,
+            "sha": commit_sha,
             "installed_at": current_time,
         }
 
@@ -781,3 +841,13 @@ class GitHubPluginSource(PluginSource):
                 json.dump(lockfile, f, indent=2)
         else:
             logger.debug(f"Plugin {plugin_key} not found in lockfile")
+
+    def _calculate_plugin_sha(self) -> str:
+        """Calculate a SHA for the plugin directory or file.
+
+        For GitHub plugins, we use the repository SHA.
+
+        Returns:
+            A SHA string representing the plugin's current state
+        """
+        return self._get_current_sha()

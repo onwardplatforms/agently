@@ -13,3 +13,5 @@ pydantic
 types-requests
 autoflake
 pytest-timeout
+types-jsonschema
+types-PyYAML

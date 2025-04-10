@@ -222,10 +222,12 @@ class Agent:
                 logger.debug(f"Loading MCP server {i+1}/{len(self.config.mcp_servers)}: {mcp_config.name}")
 
                 try:
-                    # Check if this is an SSE-based MCP server (has URL)
-                    if hasattr(mcp_config, "url") and mcp_config.url:
-                        logger.debug(f"Initializing SSE-based MCP server with URL: {mcp_config.url}")
-                        mcp_server = MCPSsePlugin(
+                    # Initialize an MCP server based on type
+                    mcp_server_instance: Any = None
+                    if hasattr(mcp_config, "url"):
+                        # This is a URL-based MCP server
+                        logger.debug(f"Initializing URL-based MCP server with URL: {mcp_config.url}")
+                        mcp_server_instance = MCPSsePlugin(
                             name=mcp_config.name,
                             description=mcp_config.description,
                             url=mcp_config.url,
@@ -233,7 +235,7 @@ class Agent:
                     else:
                         # This is a stdio-based MCP server
                         logger.debug(f"Initializing stdio-based MCP server with command: {mcp_config.command}")
-                        mcp_server = MCPStdioPlugin(
+                        mcp_server_instance = MCPStdioPlugin(
                             name=mcp_config.name,
                             description=mcp_config.description,
                             command=mcp_config.command,
@@ -242,14 +244,14 @@ class Agent:
 
                     # Connect to the MCP server
                     logger.debug(f"Connecting to MCP server: {mcp_config.name}")
-                    await mcp_server.connect()
+                    await mcp_server_instance.connect()
 
                     # Track the connection for cleanup
-                    self.mcp_server_connections.append(mcp_server)
+                    self.mcp_server_connections.append(mcp_server_instance)
 
                     # Add the MCP server to the kernel
                     logger.debug(f"Adding MCP server to kernel: {mcp_config.name}")
-                    self.kernel.add_plugin(mcp_server)
+                    self.kernel.add_plugin(mcp_server_instance)
 
                     logger.info(f"MCP server loaded and connected: {mcp_config.name}")
 
@@ -696,15 +698,24 @@ class Agent:
 
                                 # Extract tool name and input
                                 tool_name = tool_message.get("name", "unknown_tool")
+                                # Ensure tool_name is always a string
+                                if not isinstance(tool_name, str):
+                                    tool_name = str(tool_name)
                                 tool_input = tool_message.get("arguments", {})
+                                if not isinstance(tool_input, dict):
+                                    tool_input = {} if tool_input is None else {"input": tool_input}
 
                                 logger.debug(f"Extracted tool_name: {tool_name}, type: {type(tool_name)}")
 
                                 # Execute the tool and get result
                                 tool_result = await self._execute_tool(tool_name, tool_input)
 
-                                # Add to reasoning chain
-                                reasoning_chain.add_tool_call(tool_name, tool_input, tool_result)
+                                # Add to reasoning chain - ensure tool_name is a string
+                                reasoning_chain.add_tool_call(
+                                    tool_name=str(tool_name) if not isinstance(tool_name, str) else tool_name,
+                                    tool_input=tool_input,
+                                    tool_result=tool_result,
+                                )
 
                                 # Yield the tool call information
                                 yield f"Tool call: {tool_name}\nInput: {tool_input}\nResult: {tool_result}\n"
@@ -787,7 +798,8 @@ class Agent:
         Returns:
             A list of tool message dictionaries
         """
-        tool_messages = []
+        # Explicitly annotate the type to avoid confusion
+        tool_messages: List[Dict[str, Any]] = []
 
         # Add debug logging for the result
         logger.debug(f"_extract_tool_messages received result type: {type(result)}")
@@ -808,10 +820,13 @@ class Agent:
                     if hasattr(item, "name"):
                         tool_name = getattr(item, "name", "unknown_tool")
                         tool_args = getattr(item, "arguments", {})
+                        # Ensure tool_name is always a string
+                        if not isinstance(tool_name, str):
+                            tool_name = str(tool_name)
                         logger.debug(f"Extracted tool name: {tool_name}, type: {type(tool_name)}")
                         # Only add tool messages with valid names
                         if tool_name is not None:
-                            tool_messages.append({"name": tool_name, "arguments": tool_args})
+                            tool_messages.append({"name": str(tool_name), "arguments": tool_args})
                         else:
                             logger.debug("Skipping tool message with None name")
                     else:
@@ -825,10 +840,13 @@ class Agent:
                             if hasattr(sub_item, "function_name"):
                                 tool_name = getattr(sub_item, "function_name", "unknown_tool")
                                 tool_args = getattr(sub_item, "function_parameters", {})
+                                # Ensure tool_name is always a string
+                                if not isinstance(tool_name, str):
+                                    tool_name = str(tool_name)
                                 logger.debug(f"Extracted nested tool name: {tool_name}, type: {type(tool_name)}")
                                 # Only add tool messages with valid names
                                 if tool_name is not None:
-                                    tool_messages.append({"name": tool_name, "arguments": tool_args})
+                                    tool_messages.append({"name": str(tool_name), "arguments": tool_args})
                                 else:
                                     logger.debug("Skipping nested tool message with None name")
                             else:
@@ -846,20 +864,25 @@ class Agent:
                             if hasattr(sub_item, "function_name"):
                                 tool_name = getattr(sub_item, "function_name", "unknown_tool")
                                 tool_args = getattr(sub_item, "function_parameters", {})
+                                # Ensure tool_name is always a string
+                                if not isinstance(tool_name, str):
+                                    tool_name = str(tool_name)
                                 msg = f"Extracted non-tool nested tool name: {tool_name}, type: {type(tool_name)}"
                                 logger.debug(msg)
 
                                 # Only add tool messages with valid names
                                 if tool_name is not None:
-                                    tool_messages.append({"name": tool_name, "arguments": tool_args})
+                                    tool_messages.append({"name": str(tool_name), "arguments": tool_args})
                                 else:
                                     logger.debug("Skipping non-tool nested tool message with None name")
         else:
             logger.debug("Result is not a list, cannot extract tool messages")
 
         logger.debug(f"==== FINAL EXTRACTED TOOL MESSAGES: {len(tool_messages)} ====")
-        for i, msg in enumerate(tool_messages):
-            logger.debug(f"Tool message {i}: {msg}")
+        # Add type: ignore to suppress mypy error about dict vs str type incompatibility
+        for i, msg in enumerate(tool_messages):  # type: ignore
+            # Use str() to ensure we're logging a string representation of the message
+            logger.debug(f"Tool message {i}: {str(msg)}")
         return tool_messages
 
     async def _execute_tool(self, tool_name: str, tool_input: Dict[str, Any]) -> Any:
@@ -904,7 +927,7 @@ class Agent:
             if plugin_name:
                 # Try to get the result using the specific plugin
                 logger.debug(f"Executing tool {function_name} in plugin {plugin_name}")
-                result = await self.plugin_manager.execute_plugin_function(plugin_name, function_name, **tool_input)
+                result = await self.plugin_manager.execute_plugin(plugin_name, function_name, **tool_input)
                 return result
             else:
                 # Try to find the function in any plugin

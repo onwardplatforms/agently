@@ -11,8 +11,8 @@
         "plugin_type": "mcp",
         "repo_url": "github.com/modelcontextprotocol/servers",
         "plugin_path": "",
-        "commit_sha": "e8f0b15f413663bac4ff47de18735586bbc38ce9",
-        "installed_at": "2025-04-10T18:55:40.372775"
+        "sha": "e8f0b15f413663bac4ff47de18735586bbc38ce9",
+        "installed_at": "2025-04-10T21:03:52.419387"
       }
     }
   }

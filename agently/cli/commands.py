@@ -7,7 +7,7 @@ import sys
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import click
 import yaml
@@ -328,23 +328,31 @@ def list(log_level):
         # Display SK plugins
         for plugin_key, plugin_info in sk_plugins.items():
             click.echo(f"📦 {plugin_key} {styles.dim('[SK]')}")
-            click.echo(f"  Version: {plugin_info['version']}")
-            click.echo(f"  Commit: {plugin_info['commit_sha'][:8] if plugin_info.get('commit_sha') else 'unknown'}")
+            click.echo(f"  Name: {plugin_info['name']}")
+            click.echo(f"  Namespace: {plugin_info['namespace']}")
+            click.echo(f"  Version: {plugin_info['version'] if plugin_info.get('version') else 'latest'}")
+            click.echo(f"  Source: {plugin_info.get('source_type', 'unknown')}")
+            if plugin_info.get("repo_url"):
+                click.echo(f"  Repository: {plugin_info['repo_url']}")
+            if plugin_info.get("source_path"):
+                click.echo(f"  Path: {plugin_info['source_path']}")
+            click.echo(f"  Commit: {plugin_info['sha'][:8] if plugin_info.get('sha') else 'unknown'}")
             click.echo(f"  Installed: {plugin_info.get('installed_at', 'unknown')}")
-            click.echo(f"  Source: {plugin_info.get('repo_url') or plugin_info.get('source_path', 'unknown')}")
             click.echo("-" * 60)
 
         # Display MCP plugins
         for plugin_key, plugin_info in mcp_plugins.items():
             click.echo(f"🔌 {plugin_key} {styles.dim('[MCP]')}")
-            click.echo(f"  Version: {plugin_info['version']}")
-            if plugin_info.get("source_type") == "github":
-                click.echo(f"  Commit: {plugin_info['commit_sha'][:8] if plugin_info.get('commit_sha') else 'unknown'}")
-            click.echo(f"  Command: {plugin_info.get('command', 'N/A')}")
-            if plugin_info.get("args"):
-                click.echo(f"  Args: {' '.join(plugin_info.get('args', []))}")
+            click.echo(f"  Name: {plugin_info['name']}")
+            click.echo(f"  Namespace: {plugin_info['namespace']}")
+            click.echo(f"  Version: {plugin_info['version'] if plugin_info.get('version') else 'latest'}")
+            click.echo(f"  Source: {plugin_info.get('source_type', 'unknown')}")
+            if plugin_info.get("repo_url"):
+                click.echo(f"  Repository: {plugin_info['repo_url']}")
+            if plugin_info.get("source_path"):
+                click.echo(f"  Path: {plugin_info['source_path']}")
+            click.echo(f"  Commit: {plugin_info['sha'][:8] if plugin_info.get('sha') else 'unknown'}")
             click.echo(f"  Installed: {plugin_info.get('installed_at', 'unknown')}")
-            click.echo(f"  Source: {plugin_info.get('repo_url') or plugin_info.get('source_path', 'unknown')}")
             click.echo("-" * 60)
 
     except Exception as e:
@@ -392,14 +400,14 @@ def _initialize_plugins(config_path, quiet=False, force=False):
     # Create empty lockfile if it doesn't exist
     if not lockfile_path.exists():
         logger.info("Creating new lockfile")
-        lockfile = {"plugins": {"sk": {}, "mcp": {}}}
+        lockfile: Dict[str, Dict[str, Dict[str, Any]]] = {"plugins": {"sk": {}, "mcp": {}}}
         with open(lockfile_path, "w") as f:
             json.dump(lockfile, f, indent=2)
     else:
         # Load existing lockfile
         with open(lockfile_path, "r") as f:
             try:
-                lockfile = json.load(f)
+                lockfile = json.load(f)  # This is safe because we already declared the type above
             except json.JSONDecodeError:
                 logger.error("Invalid lockfile, creating new one")
                 lockfile = {"plugins": {"sk": {}, "mcp": {}}}
@@ -474,14 +482,16 @@ def _initialize_plugins(config_path, quiet=False, force=False):
     for github_plugin_config in github_plugins:
         repo_url = github_plugin_config["source"]
         version = github_plugin_config.get("version", "main")
-        plugin_path = github_plugin_config.get("plugin_path", "")
+        github_plugin_config.get("plugin_path", "")
         plugin_type = github_plugin_config.get("type", "sk")  # Get plugin type from config
 
         # Create a GitHubPluginSource
         source = GitHubPluginSource(
             repo_url=repo_url,
+            plugin_path="",  # Default empty
+            namespace="",  # Will be extracted from repo_url
+            name="",  # Will be extracted from repo_url
             version=version,
-            plugin_path=plugin_path,
             force_reinstall=False,  # We'll handle force flag separately
             plugin_type=plugin_type,  # Pass plugin type from config
         )
@@ -496,7 +506,7 @@ def _initialize_plugins(config_path, quiet=False, force=False):
         if plugin_type == "mcp":
             if plugin_key in lockfile.get("plugins", {}).get("mcp", {}):
                 # MCP plugin exists in lockfile, check if it needs updating
-                lockfile_sha = lockfile["plugins"]["mcp"][plugin_key].get("commit_sha", "")
+                lockfile_sha = lockfile["plugins"]["mcp"][plugin_key].get("sha", "")
                 if force or source.needs_update(lockfile_sha):
                     mcp_to_update.add(plugin_key)
                 else:
@@ -508,7 +518,7 @@ def _initialize_plugins(config_path, quiet=False, force=False):
             # Standard plugin
             if plugin_key in lockfile.get("plugins", {}).get("sk", {}):
                 # Plugin exists in lockfile, check if it needs updating
-                lockfile_sha = lockfile["plugins"]["sk"][plugin_key].get("commit_sha", "")
+                lockfile_sha = lockfile["plugins"]["sk"][plugin_key].get("sha", "")
                 if force or source.needs_update(lockfile_sha):
                     to_update.add(plugin_key)
                 else:
@@ -539,7 +549,7 @@ def _initialize_plugins(config_path, quiet=False, force=False):
 
         if plugin_key in lockfile.get("plugins", {}).get(target_section, {}):
             # Plugin exists in lockfile, check if it needs updating
-            lockfile_sha = lockfile["plugins"][target_section][plugin_key].get("sha256", "")
+            lockfile_sha = lockfile["plugins"][target_section][plugin_key].get("sha", "")
             if force or local_source.needs_update(lockfile_sha):
                 to_update.add(plugin_key)
             else:
@@ -548,20 +558,51 @@ def _initialize_plugins(config_path, quiet=False, force=False):
             # New plugin
             to_add.add(plugin_key)
 
+    # Process GitHub MCP servers
+    for github_mcp_config in github_mcp_servers:
+        repo_url = github_mcp_config["source"]
+        version = github_mcp_config.get("version", "main")
+        server_path = github_mcp_config.get("server_path", "")
+        name = github_mcp_config.get("name", "")
+
+        # Create a GitHubPluginSource for the MCP server
+        source = GitHubPluginSource(
+            repo_url=repo_url,
+            plugin_path=server_path,
+            namespace="",  # Will be extracted from repo_url
+            name=name if name else "",  # Use provided name or extract from repo_url
+            version=version,
+            force_reinstall=force,
+            cache_dir=Path.cwd() / ".agently" / "plugins" / "mcp",
+            plugin_type="mcp",  # Specify that this is an MCP server
+        )
+
+        mcp_key = f"{source.namespace}/{source.name}"
+        mcp_server_details[mcp_key] = f"version={version}"
+
+        if mcp_key in lockfile.get("plugins", {}).get("mcp", {}):
+            # MCP server exists in lockfile, check if it needs updating
+            lockfile_sha = lockfile["plugins"]["mcp"][mcp_key].get("sha", "")
+            if force or source.needs_update(lockfile_sha):
+                mcp_to_update.add(mcp_key)
+            else:
+                mcp_unchanged.add(mcp_key)
+        else:
+            # New MCP server
+            mcp_to_add.add(mcp_key)
+
     # Process local MCP servers
     for local_mcp_config in local_mcp_servers:
         name = local_mcp_config.get("name", "")
         source_path = local_mcp_config.get("source", "")
-        command = local_mcp_config.get("command", "")
-        args = local_mcp_config.get("args", [])
-        description = local_mcp_config.get("description", "")
-        variables = local_mcp_config.get("variables", {})
 
-        mcp_key = f"local/{name}"
-        
         if source_path:
             abs_source_path = config_path.parent / source_path
-            # Create a local MCP source for handling the source path
+            # Use the same naming approach as during detection
+            if not name:
+                name = os.path.basename(source_path)
+
+            # Create a local MCP source similar to plugin sources
             local_source = LocalPluginSource(
                 path=Path(abs_source_path),
                 namespace="local",
@@ -570,12 +611,13 @@ def _initialize_plugins(config_path, quiet=False, force=False):
                 cache_dir=Path.cwd() / ".agently" / "plugins" / "mcp",
                 plugin_type="mcp",  # Specify that this is an MCP server
             )
-            
+
+            mcp_key = f"{local_source.namespace}/{name}"
             mcp_server_details[mcp_key] = f"path={source_path}"
-            
+
             if mcp_key in lockfile.get("plugins", {}).get("mcp", {}):
                 # MCP server exists in lockfile, check if it needs updating
-                lockfile_sha = lockfile["plugins"]["mcp"][mcp_key].get("sha256", "")
+                lockfile_sha = lockfile["plugins"]["mcp"][mcp_key].get("sha", "")
                 if force or local_source.needs_update(lockfile_sha):
                     mcp_to_update.add(mcp_key)
                 else:
@@ -585,8 +627,9 @@ def _initialize_plugins(config_path, quiet=False, force=False):
                 mcp_to_add.add(mcp_key)
         else:
             # For local MCP servers without source files, just use the name
+            mcp_key = f"local/{name}"
             mcp_server_details[mcp_key] = "command-only"
-            
+
             if mcp_key in lockfile.get("plugins", {}).get("mcp", {}):
                 # For command-only MCP servers, only update if forced
                 if force:
@@ -677,15 +720,17 @@ def _initialize_plugins(config_path, quiet=False, force=False):
     for github_plugin_config in github_plugins:
         repo_url = github_plugin_config["source"]
         version = github_plugin_config.get("version", "main")
-        plugin_path = github_plugin_config.get("plugin_path", "")
+        github_plugin_config.get("plugin_path", "")
         plugin_type = github_plugin_config.get("type", "sk")  # Get plugin type from config
 
         # Create a GitHubPluginSource
         source = GitHubPluginSource(
             repo_url=repo_url,
+            plugin_path="",  # Default empty
+            namespace="",  # Will be extracted from repo_url
+            name="",  # Will be extracted from repo_url
             version=version,
-            plugin_path=plugin_path,
-            force_reinstall=force,  # Pass the force flag to control reinstallation
+            force_reinstall=False,  # We'll handle force flag separately
             plugin_type=plugin_type,  # Pass plugin type from config
         )
 
@@ -769,33 +814,78 @@ def _initialize_plugins(config_path, quiet=False, force=False):
         version = github_mcp_config.get("version", "main")
         server_path = github_mcp_config.get("server_path", "")
         name = github_mcp_config.get("name", "")
+        command = github_mcp_config.get("command", "")
+        args = github_mcp_config.get("args", [])
+        description = github_mcp_config.get("description", "")
+        variables = github_mcp_config.get("variables", {})
 
         # Create a GitHubPluginSource for the MCP server
         source = GitHubPluginSource(
             repo_url=repo_url,
-            version=version,
             plugin_path=server_path,
+            namespace="",  # Will be extracted from repo_url
+            name=name if name else "",  # Use provided name or extract from repo_url
+            version=version,
             force_reinstall=force,
             cache_dir=Path.cwd() / ".agently" / "plugins" / "mcp",
-            name=name,
             plugin_type="mcp",  # Specify that this is an MCP server
         )
 
         mcp_key = f"{source.namespace}/{source.name}"
-        mcp_server_details[mcp_key] = f"version={version}"
 
-        if mcp_key in lockfile.get("plugins", {}).get("mcp", {}):
-            # MCP server exists in lockfile, check if it needs updating
-            lockfile_sha = lockfile["plugins"]["mcp"][mcp_key].get("commit_sha", "")
-            if force or source.needs_update(lockfile_sha):
-                mcp_to_update.add(mcp_key)
+        # Skip if unchanged and not forced
+        if mcp_key in mcp_unchanged and not force:
+            installed_mcp_servers.add(mcp_key)
+            continue
+
+        try:
+            # For MCP servers, we don't need to load a plugin class
+            # We just need to clone/update the repository
+            source._clone_or_update_repo(source.cache_dir / source.name)
+
+            # Get current timestamp in ISO format
+            current_time = datetime.utcnow().isoformat()
+
+            # Get the MCP server directory
+            mcp_dir = source.cache_dir / source.name
+
+            # Get the commit SHA
+            commit_sha = source._get_repo_sha(mcp_dir)
+
+            # Create MCP server info for lockfile
+            mcp_info = {
+                "namespace": source.namespace,
+                "name": source.name,
+                "full_name": f"{source.namespace}/{source.name}",
+                "version": version,
+                "source_type": "github",
+                "repo_url": source.repo_url,
+                "server_path": server_path,
+                "command": command,
+                "args": args,
+                "description": description,
+                "variables": variables,
+                "sha": commit_sha,
+                "installed_at": current_time,
+            }
+
+            # Add to installed MCP servers
+            installed_mcp_servers.add(mcp_key)
+
+            # Update lockfile with MCP server info
+            if mcp_info.get("plugin_type") == "mcp":
+                lockfile["plugins"]["mcp"][mcp_key] = mcp_info
             else:
-                mcp_unchanged.add(mcp_key)
-        else:
-            # New MCP server
-            mcp_to_add.add(mcp_key)
+                lockfile["plugins"]["sk"][mcp_key] = mcp_info
 
-    # Process local MCP servers
+            # MCP servers are installed silently
+        except Exception as e:
+            logger.error(f"Failed to install GitHub MCP server {repo_url}: {e}")
+            mcp_failed.add(mcp_key)
+            if not quiet:
+                click.echo(f"{styles.red('✗')} Failed to install MCP {mcp_key}: {e}")
+
+    # Install local MCP servers
     for local_mcp_config in local_mcp_servers:
         name = local_mcp_config.get("name", "")
         source_path = local_mcp_config.get("source", "")
@@ -845,94 +935,22 @@ def _initialize_plugins(config_path, quiet=False, force=False):
                 "args": args,
                 "description": description,
                 "variables": variables,
-                "sha256": plugin_sha,
+                "sha": plugin_sha,
                 "installed_at": current_time,
-                "plugin_type": "mcp",  # Explicitly set plugin type for consistent tracking
             }
 
             # Add to installed MCP servers
             installed_mcp_servers.add(mcp_key)
 
-            # Update lockfile with MCP server info - always put MCP servers in the mcp section
-            lockfile["plugins"]["mcp"][mcp_key] = mcp_info
+            # Update lockfile with MCP server info
+            if mcp_info.get("plugin_type") == "mcp":
+                lockfile["plugins"]["mcp"][mcp_key] = mcp_info
+            else:
+                lockfile["plugins"]["sk"][mcp_key] = mcp_info
 
             # MCP servers are installed silently
         except Exception as e:
             logger.error(f"Failed to install local MCP server {name}: {e}")
-            mcp_failed.add(mcp_key)
-            if not quiet:
-                click.echo(f"{styles.red('✗')} Failed to install MCP {mcp_key}: {e}")
-
-    # Install GitHub MCP servers
-    for github_mcp_config in github_mcp_servers:
-        repo_url = github_mcp_config["source"]
-        version = github_mcp_config.get("version", "main")
-        server_path = github_mcp_config.get("server_path", "")
-        name = github_mcp_config.get("name", "")
-        command = github_mcp_config.get("command", "")
-        args = github_mcp_config.get("args", [])
-        description = github_mcp_config.get("description", "")
-        variables = github_mcp_config.get("variables", {})
-
-        # Create a GitHubPluginSource for the MCP server
-        source = GitHubPluginSource(
-            repo_url=repo_url,
-            version=version,
-            plugin_path=server_path,
-            force_reinstall=force,
-            cache_dir=Path.cwd() / ".agently" / "plugins" / "mcp",
-            name=name,
-            plugin_type="mcp",  # Specify that this is an MCP server
-        )
-
-        mcp_key = f"{source.namespace}/{source.name}"
-
-        # Skip if unchanged and not forced
-        if mcp_key in mcp_unchanged and not force:
-            installed_mcp_servers.add(mcp_key)
-            continue
-
-        try:
-            # For MCP servers, we don't need to load a plugin class
-            # We just need to clone/update the repository
-            source._clone_or_update_repo(source.cache_dir / source.name)
-
-            # Get current timestamp in ISO format
-            current_time = datetime.utcnow().isoformat()
-
-            # Get the MCP server directory
-            mcp_dir = source.cache_dir / source.name
-
-            # Get the commit SHA
-            commit_sha = source._get_repo_sha(mcp_dir)
-
-            # Create MCP server info for lockfile
-            mcp_info = {
-                "namespace": source.namespace,
-                "name": source.name,
-                "full_name": f"{source.namespace}/{source.name}",
-                "version": version,
-                "source_type": "github",
-                "repo_url": source.repo_url,
-                "server_path": server_path,
-                "command": command,
-                "args": args,
-                "description": description,
-                "variables": variables,
-                "commit_sha": commit_sha,
-                "installed_at": current_time,
-                "plugin_type": "mcp",  # Explicitly set plugin type for consistent tracking
-            }
-
-            # Add to installed MCP servers
-            installed_mcp_servers.add(mcp_key)
-
-            # Update lockfile with MCP server info - always put in mcp section
-            lockfile["plugins"]["mcp"][mcp_key] = mcp_info
-
-            # MCP servers are installed silently
-        except Exception as e:
-            logger.error(f"Failed to install GitHub MCP server {repo_url}: {e}")
             mcp_failed.add(mcp_key)
             if not quiet:
                 click.echo(f"{styles.red('✗')} Failed to install MCP {mcp_key}: {e}")
@@ -972,18 +990,17 @@ def _initialize_plugins(config_path, quiet=False, force=False):
         # Always show summary of installed plugins, regardless of whether there were changes
         click.echo("\nAgently has loaded the following plugins:")
 
-        # Count all installed plugins (SK + MCP)
+        # Count all installed plugins
         sk_plugin_count = len(lockfile["plugins"]["sk"])
         mcp_plugin_count = len(lockfile["plugins"]["mcp"])
-        total_plugins = sk_plugin_count + mcp_plugin_count
 
         # Debug output
-        if total_plugins == 0:
+        if sk_plugin_count == 0 and mcp_plugin_count == 0:
             logger.debug("No plugins found in lockfile")
 
         # Show SK plugins
         if sk_plugin_count > 0:
-            click.echo(f"{styles.green('✓')} {sk_plugin_count} Semantic Kernel plugin{'s' if sk_plugin_count != 1 else ''}")
+            click.echo(f"{styles.green('✓')} {sk_plugin_count} Agently plugin{'s' if sk_plugin_count != 1 else ''}")
             for plugin_key, plugin_info in lockfile["plugins"]["sk"].items():
                 version = plugin_info.get("version", "latest")
                 click.echo(f"  - {plugin_key} {styles.dim(version)}")
@@ -996,7 +1013,7 @@ def _initialize_plugins(config_path, quiet=False, force=False):
                 click.echo(f"  - {plugin_key} {styles.dim(version)} {styles.dim('(MCP)')}")
 
         # Show placeholder if no plugins installed
-        if total_plugins == 0:
+        if sk_plugin_count == 0 and mcp_plugin_count == 0:
             click.echo(f"{styles.dim('i')} No plugins installed")
 
     # Return statistics for testing and for the init command

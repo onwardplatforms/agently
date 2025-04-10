@@ -244,8 +244,8 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
                     description=github_plugin.get("description", ""),
                     variables=github_plugin.get("variables", {}),
                     source_type="github",
-                    repo_url=github_source.repo_url,
-                    version=github_source.version,
+                    repo_url=github_source.repo_url if hasattr(github_source, "repo_url") else None,
+                    version=github_source.version if hasattr(github_source, "version") else None,
                     server_path=github_plugin.get("server_path", ""),
                 )
             )

@@ -9,8 +9,8 @@
         "source_type": "local",
         "plugin_type": "sk",
         "source_path": "plugins/hello",
-        "sha256": "b6e3352bef9fa28ef3c6c99e5a00d4da21bc3456c5c0857e7ee79074dd8a30bb",
-        "installed_at": "2025-04-10T17:18:55.715257"
+        "sha": "b6e3352bef9fa28ef3c6c99e5a00d4da21bc3456c5c0857e7ee79074dd8a30bb",
+        "installed_at": "2025-04-10T20:59:04.052010"
       }
     },
     "mcp": {}
