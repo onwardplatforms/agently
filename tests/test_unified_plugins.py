@@ -539,11 +539,11 @@ def test_initialize_plugins_with_mocking():
         # Verify the structure matches expected
         assert lockfile_data["plugins"] == {
             "sk": {
-                "local/local1": {"sha": "def456", "plugin_type": "sk"},
-                "github/remote1": {"sha": "abc123", "plugin_type": "sk"},
+                "local/local1": {"namespace": "local", "name": "local1", "plugin_type": "sk", "sha": "def456"},
+                "testuser/plugin1": {"namespace": "testuser", "name": "plugin1", "plugin_type": "sk", "sha": "abc123"},
             },
             "mcp": {
-                "local/mcp-server": {"sha": "jkl012"},
-                "github/mcp-remote": {"sha": "ghi789"},
+                "local/mcp-server": {"namespace": "local", "name": "mcp-server", "plugin_type": "mcp", "sha": "jkl012"},
+                "testuser/mcp-hello": {"namespace": "testuser", "name": "mcp-hello", "plugin_type": "mcp", "sha": "def456"},
             },
         } 

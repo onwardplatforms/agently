@@ -127,7 +127,7 @@ class PluginSource(ABC):
                     logger.info(f"Calculated SHA: {current_sha}")
                     logger.info(f"Lockfile SHA: {lockfile_sha}")
                     logger.info(f"SHA match? {current_sha == lockfile_sha}")
-                    
+
                     if not current_sha:
                         logger.debug(f"Failed to calculate SHA for {self.name}")
                         return True
