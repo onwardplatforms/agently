@@ -60,13 +60,16 @@ class PluginSource(ABC):
             True if plugin needs update, False otherwise
         """
         try:
+            logger.info(f"Checking if plugin {self.name} needs update (lockfile_sha: {lockfile_sha})")
+            
             # If force_reinstall is True, always update
             if self.force_reinstall:
                 logger.debug(f"Force reinstall enabled for {self.name}")
                 return True
 
-            # Get the plugin directory
-            plugin_dir = self._get_plugin_dir()
+            # Get the plugin directory - use _get_cache_path instead of _get_plugin_dir
+            plugin_dir = self._get_cache_path()
+            logger.info(f"Plugin directory: {plugin_dir}, exists: {plugin_dir.exists()}")
 
             # If plugin_dir doesn't exist, it needs to be installed
             if not plugin_dir.exists():
@@ -74,8 +77,13 @@ class PluginSource(ABC):
                 return True
 
             # For Git repositories, check commit SHA
-            if (plugin_dir / ".git").exists():
+            git_dir = plugin_dir / ".git"
+            logger.info(f"Git directory: {git_dir}, exists: {git_dir.exists()}")
+            
+            if git_dir.exists():
                 current_sha = self._get_repo_sha(plugin_dir)
+                logger.info(f"Current SHA: {current_sha}")
+                
                 if not current_sha:
                     logger.warning(f"Could not get commit SHA for {self.name}")
                     return True
@@ -87,15 +95,21 @@ class PluginSource(ABC):
                 if current_sha != lockfile_sha:
                     logger.debug(f"SHA mismatch for {self.name}: {current_sha} != {lockfile_sha}")
                     return True
+                
+                logger.info(f"SHAs match, no update needed for {self.name}")
+                return False
             else:
                 # For local plugins, check file hash if lockfile has a SHA
+                logger.info(f"Not a git repository, treating as local plugin")
                 if lockfile_sha:
                     current_sha = self._calculate_plugin_sha()
+                    logger.info(f"Calculated SHA: {current_sha}")
                     if not current_sha or current_sha != lockfile_sha:
                         logger.debug(f"Local SHA mismatch for {self.name}")
                         return True
 
             # No update needed
+            logger.info(f"No update needed for {self.name}")
             return False
         except Exception as e:
             logger.warning(f"Error checking if plugin needs update: {e}")
@@ -447,8 +461,8 @@ class GitHubPluginSource(PluginSource):
 
     def _get_cache_path(self) -> Path:
         """Get the path where this plugin version should be cached."""
-        # Use normalized version for the cache path
-        return self.cache_dir / self.namespace / self.name / self.version
+        # The actual clone location is just the plugin name under the cache directory
+        return self.cache_dir / self.name
 
     def _get_lockfile_path(self) -> Path:
         """Get the path to the lockfile for this plugin."""

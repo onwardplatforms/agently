@@ -9,7 +9,20 @@
       "source_path": "plugins/coder",
       "sha256": "34bbbb2de188c425513af4943b1387ef388a9ead282915322b15f8107095dd3f",
       "installed_at": "2025-04-09T03:21:46.284951"
-    }
-  },
-  "mcp_servers": {}
+    },
+    "sk": {
+      "local/coder": {
+        "namespace": "local",
+        "name": "coder",
+        "full_name": "coder",
+        "version": "local",
+        "source_type": "local",
+        "plugin_type": "sk",
+        "source_path": "plugins/coder",
+        "sha256": "34bbbb2de188c425513af4943b1387ef388a9ead282915322b15f8107095dd3f",
+        "installed_at": "2025-04-10T04:57:25.210132"
+      }
+    },
+    "mcp": {}
+  }
 }
