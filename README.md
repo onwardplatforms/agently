@@ -1,14 +1,14 @@
 # Agently - Declarative AI Agent Framework
 
-Agently is a Python framework for building, configuring, and running AI agents in a declarative way. Define your agents using YAML configurations and bring them to life with minimal code.
+Agently is the batteries included framework for creating AI agents in a declarative way with a simple CLI tool to initialize and run agents. Define your agents using YAML configurations and bring them to life with minimal code.
 
-## Features
+## Core Design Principles
 
-- **Declarative Configurations**: Define agents with YAML files
-- **Plugin System**: Extend agent capabilities with plugins
-- ****Environment** Variable Integration**: Securely handle API keys and configuration
-- **Multiple Model Providers**: Support for OpenAI, Ollama, and more
-- **Flexible Execution**: CLI, Python API, or interactive mode
+- **Declarative Configuration**: Define complete agents using simple YAML files
+- **Flexible Plugin Ecosystem**: Extend agent capabilities with MCP, Semantic Kernel, and Agently plugins
+- **Community Sharing**: Share and reuse plugins across the Agently community
+- **Provider Agnostic**: Support for multiple model providers including OpenAI, Ollama, and more
+- **Streamlined CLI**: Simple `init` and `run` commands to manage your agent lifecycle
 
 ## Installation
 
@@ -86,6 +86,130 @@ EOF
 # Run the agent
 agently run
 ```
+
+## Plugin System
+
+Agently features a unified plugin system that makes it easy to extend your agent's capabilities through various plugin types.
+
+### Supported Plugin Types
+
+#### Semantic Kernel (SK) Plugins
+
+Standard plugins that provide function-based capabilities to your agent:
+
+```yaml
+plugins:
+  github:
+    - source: "username/plugin-name"  # Will use agently-plugin- prefix
+      version: "main"
+      variables:
+        key: "value"
+  local:
+    - source: "./plugins/my-local-plugin"
+      variables:
+        key: "value"
+```
+
+#### Multi-Command Protocol (MCP) Servers
+
+External servers that enable complex, stateful interactions:
+
+```yaml
+plugins:
+  github:
+    - source: "username/mcp-server-name"
+      type: "mcp"  # Identifies this as an MCP server
+      version: "main"
+      command: "python"  # How to start the server
+      args: ["server.py"]
+  local:
+    - source: "./mcp-servers/my-local-server"
+      type: "mcp"
+      command: "python"
+      args: ["server.py"]
+```
+
+### Developing Plugins
+
+#### Using the Agently SDK
+
+For easier plugin development, we recommend using the [Agently SDK](https://github.com/onwardplatforms/agently-sdk), which provides base classes and utilities for creating plugins:
+
+```python
+from agently_sdk.plugins import Plugin, PluginVariable, agently_function
+
+class MyPlugin(Plugin):
+    name = "my_plugin"
+    description = "A useful description of what this plugin does"
+    
+    # Define configurable variables for your plugin
+    api_key = PluginVariable(
+        description="API key for the service",
+        sensitive=True  # Marks as sensitive info
+    )
+    
+    max_results = PluginVariable(
+        description="Maximum number of results to return",
+        default=10,
+        type=int
+    )
+    
+    @agently_function
+    def my_function(self, param1: str, param2: int = 5) -> str:
+        """Function description that will be used by the agent.
+        
+        Args:
+            param1: First parameter description
+            param2: Second parameter description
+            
+        Returns:
+            Description of the return value
+        """
+        # Implementation using plugin variables
+        return f"Processed {param1} with {self.max_results} results"
+```
+
+#### Plugin Variables
+
+Plugins can define variables that:
+- Allow for runtime configuration
+- Can have default values, validation rules, and type constraints
+- Are set via the `variables` section in the agent config
+
+### Plugin Installation & Management
+
+Plugins are managed using a structured workflow similar to Terraform:
+
+```bash
+# Initialize and install all plugins defined in your config
+agently init
+
+# List all installed plugins
+agently list
+
+# Run your agent with the installed plugins
+agently run
+```
+
+### Plugin Storage
+
+Plugins are stored in the `.agently/plugins` directory, organized by type:
+- SK plugins: `.agently/plugins/sk/`
+- MCP servers: `.agently/plugins/mcp/`
+
+For more advanced usage and detailed documentation, check out the [full plugin documentation](https://docs.agently.run/plugins).
+
+### Plugin Naming Conventions
+
+When creating plugins to share with the community, follow these naming conventions for GitHub repositories:
+
+- **Semantic Kernel Plugins**: Use the prefix `agently-plugin-`
+  - Example: `agently-plugin-weather` for a weather plugin
+
+- **MCP Servers**: Use the prefix `agently-mcp-`
+  - Example: `agently-mcp-database` for a database MCP server
+
+These conventions help with discoverability and make it clear what type of plugin a repository contains.
 
 ## Coder Agent Quick Start
 
@@ -248,12 +372,15 @@ python -m flake8 agently
      temperature: 0.7
    
    plugins:
-     # Add any plugins your agent needs
-     my-plugin:
-       source:
-         type: "github"
-         repo: "username/repo"
-         path: "plugins/my-plugin"
+     github:
+       - source: "username/plugin-name"
+         version: "main"
+         variables:
+           api_key: ${{ env.SERVICE_API_KEY }}
+     local:
+       - source: "./plugins/my-local-plugin"
+         variables:
+           max_results: 20
    
    env:
      OPENAI_API_KEY: ${{ env.OPENAI_API_KEY }}
@@ -288,4 +415,36 @@ MIT
 
 ## Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+Contributions are welcome! Here's how you can contribute to Agently:
+
+### Code Contributions
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/your-feature-name`
+3. Commit your changes: `git commit -am 'Add some feature'`
+4. Push to the branch: `git push origin feature/your-feature-name`
+5. Submit a pull request
+
+### Creating Plugins
+
+1. Use the [Agently SDK](https://github.com/onwardplatforms/agently-sdk) for developing plugins
+2. Follow the naming conventions for GitHub repositories
+3. Add comprehensive documentation in your plugin's README
+4. Include example usage in your plugin's documentation
+
+### Documentation
+
+Help improve our documentation by submitting PRs for:
+- Fixes for unclear instructions
+- Additional examples of using Agently
+- Tutorials for specific use cases
+
+### Bug Reports
+
+Found a bug? Please open an issue with:
+- A clear description of the problem
+- Steps to reproduce the issue
+- Expected vs actual behavior
+- Environment details (OS, Python version, etc.)
+
+For more details, see [CONTRIBUTING.md](CONTRIBUTING.md).
