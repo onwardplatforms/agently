@@ -182,6 +182,11 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
         
         # For MCP type plugins, handle MCP-specific fields
         if plugin_type == "mcp":
+            # Note: MCP servers are treated as plugins for installation/management,
+            # but also need separate MCPServerConfig objects for runtime initialization.
+            # That's why we create both a PluginConfig (for unified plugin management)
+            # and an MCPServerConfig (for backward compatibility and runtime usage).
+            
             # Create both a plugin config and an MCP server config
             if "command" in local_plugin and "args" in local_plugin:
                 # Get the source object's name for the MCP server
@@ -219,32 +224,34 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
             plugin_type=plugin_type,  # Set the plugin type
         )
         
-        # For MCP type plugins, handle MCP-specific fields
-        if plugin_type == "mcp":
-            # Create both a plugin config and an MCP server config
-            if "command" in github_plugin and "args" in github_plugin:
-                # Get the source object's namespace and name for the MCP server
-                name = github_source.name
-                
-                mcp_server_configs.append(
-                    MCPServerConfig(
-                        name=name,
-                        command=github_plugin["command"],
-                        args=github_plugin.get("args", []),
-                        description=github_plugin.get("description", ""),
-                        variables=github_plugin.get("variables", {}),
-                        source_type="github",
-                        repo_url=github_plugin["source"],
-                        version=github_plugin.get("version", "main"),
-                        server_path=github_plugin.get("server_path", "") or github_plugin.get("plugin_path", ""),
-                    )
+        # If it's an MCP server, set additional properties
+        if github_source.plugin_type == "mcp":
+            setattr(github_source, 'command', github_plugin.get("command", "python"))
+            setattr(github_source, 'args', github_plugin.get("args", []))
+            setattr(github_source, 'description', github_plugin.get("description", ""))
+            setattr(github_source, 'server_path', github_plugin.get("server_path", ""))
+            
+            # Note: MCP servers are treated as plugins for installation/management,
+            # but also need separate MCPServerConfig objects for runtime initialization.
+            # That's why we create both a PluginConfig (for unified plugin management)
+            # and an MCPServerConfig (for backward compatibility and runtime usage).
+            name = github_source.name
+            
+            mcp_server_configs.append(
+                MCPServerConfig(
+                    name=name,
+                    command=github_plugin.get("command", "python"),
+                    args=github_plugin.get("args", []),
+                    description=github_plugin.get("description", ""),
+                    variables=github_plugin.get("variables", {}),
+                    source_type="github",
+                    repo_url=github_source.repo_url,
+                    version=github_source.version,
+                    server_path=github_plugin.get("server_path", ""),
                 )
-                
-                # Also add to plugin_configs for initialization
-                plugin_configs.append(PluginConfig(source=github_source, variables=github_plugin.get("variables", {})))
-        else:
-            # For non-MCP plugins, just add them to plugin_configs
-            plugin_configs.append(PluginConfig(source=github_source, variables=github_plugin.get("variables", {})))
+            )
+        
+        plugin_configs.append(PluginConfig(source=github_source, variables=github_plugin.get("variables", {})))
 
     # Process MCP servers by type
     mcp_servers_yaml = yaml_config.get("mcp_servers", {})

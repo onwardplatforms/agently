@@ -63,16 +63,20 @@ class TestPlugin(Plugin):
         with open(lockfile, "w") as f:
             json.dump({
                 "plugins": {
-                    "local/test": {
-                        "namespace": "local",
-                        "name": "test",
-                        "full_name": "test",
-                        "version": "local",
-                        "source_type": "local",
-                        "source_path": str(plugins_dir),
-                        "sha": "test-sha",
-                        "installed_at": "2023-01-01T00:00:00"
-                    }
+                    "sk": {
+                        "local/test": {
+                            "namespace": "local",
+                            "name": "test",
+                            "full_name": "test",
+                            "version": "local",
+                            "source_type": "local",
+                            "plugin_type": "sk",
+                            "source_path": str(plugins_dir),
+                            "sha256": "test-sha",
+                            "installed_at": "2023-01-01T00:00:00"
+                        }
+                    },
+                    "mcp": {}
                 }
             }, f)
         
@@ -90,7 +94,15 @@ def test_cli_init_command(temp_project_dir):
     """Test the init command."""
     # Run the init command
     runner = CliRunner()
-    result = runner.invoke(cli, ["init", "--quiet"])
+    result = runner.invoke(cli, ["init"])
+    
+    # Print debug information
+    print(f"Exit code: {result.exit_code}")
+    print(f"Output: {result.output}")
+    if result.exception:
+        print(f"Exception: {result.exception}")
+        import traceback
+        traceback.print_exception(type(result.exception), result.exception, result.exception.__traceback__)
     
     # Check that the command executed successfully
     assert result.exit_code == 0
@@ -103,8 +115,10 @@ def test_cli_init_command(temp_project_dir):
     with open(lockfile_path, "r") as f:
         lockfile = json.load(f)
     
-    # Verify the plugin is in the lockfile
-    assert "local/test" in lockfile["plugins"]
+    # Verify the plugin is in the lockfile with the new structure
+    assert "plugins" in lockfile
+    assert "sk" in lockfile["plugins"]
+    assert "local/test" in lockfile["plugins"]["sk"]
 
 
 def test_cli_list_command(temp_project_dir):
@@ -115,6 +129,9 @@ def test_cli_list_command(temp_project_dir):
     
     # Check that the command executed successfully
     assert result.exit_code == 0
+    
+    # Print output for debugging
+    print(f"List command output: {result.output}")
     
     # Check that the output contains the plugin
     assert "local/test" in result.output
@@ -334,7 +351,8 @@ def test_init_with_mcp_servers(
         def __init__(self):
             pass
         
-        def get_kernel_functions(self):
+        @classmethod
+        def get_kernel_functions(cls):
             return {}
     
     # Set up mocks
