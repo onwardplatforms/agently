@@ -9,10 +9,11 @@ This example demonstrates how to use the Model Context Protocol (MCP) Git server
    export OPENAI_API_KEY=your_api_key_here
    ```
 
-2. Initialize the directory as a Git repository:
-   ```bash
-   git init
+2. **Important**: Update the `agently.yaml` file to point to a valid Git repository on your system:
+   ```yaml
+   args: ["mcp-server-git", "--repository", "/path/to/valid/git/repository"]
    ```
+   Replace `/path/to/valid/git/repository` with an actual Git repository path on your system.
 
 3. Initialize Agently to install the MCP Git server:
    ```bash
@@ -21,11 +22,16 @@ This example demonstrates how to use the Model Context Protocol (MCP) Git server
 
 ## Running the Example
 
-Run the agent with a prompt that uses Git operations:
+Run the agent with the Git MCP server:
 
 ```bash
-agently run "What is the status of this repository? Then, add all files and create a commit with the message 'Initial commit'."
+agently run
 ```
+
+You can then ask the agent to perform various Git operations like:
+- "What is the status of this repository?"
+- "Add all files to the staging area"
+- "Commit my changes with a message 'Initial commit'"
 
 ## Available Git Tools
 
