@@ -37,6 +37,14 @@ plugins:
     - source: "https://github.com/testuser/agently-plugin-advanced"
       version: "main"
       plugin_path: "plugins/advanced"
+    - source: "testuser/mcp-hello"
+      type: "mcp"
+      version: "main"
+      command: "python"
+      args:
+        - "server.py"
+      variables:
+        default_name: "MCPFriend"
 """
         )
     yield Path(temp_file.name)
@@ -73,6 +81,22 @@ def test_github_plugin_source_formats():
     assert source4.name == "existing"
     assert source4.full_repo_name == "agently-plugin-existing"
     assert source4.repo_url == "github.com/testuser/agently-plugin-existing"
+    
+    # Test with MCP server type
+    source5 = GitHubPluginSource(repo_url="testuser/hello", plugin_type="mcp")
+    assert source5.namespace == "testuser"
+    assert source5.name == "hello"
+    assert source5.full_repo_name == "hello"  # No prefix for MCP servers
+    assert source5.repo_url == "github.com/testuser/hello"  # No prefix in URL for MCP
+    assert source5.plugin_type == "mcp"
+    
+    # Test with MCP prefix in name
+    source6 = GitHubPluginSource(repo_url="testuser/agently-mcp-hello", plugin_type="mcp")
+    assert source6.namespace == "testuser"
+    assert source6.name == "hello"  # Strip prefix for storage name
+    assert source6.full_repo_name == "agently-mcp-hello"  # Keep prefix in full repo name
+    assert source6.repo_url == "github.com/testuser/agently-mcp-hello"
+    assert source6.plugin_type == "mcp"
 
 
 @patch("agently.plugins.sources.GitHubPluginSource.load")
@@ -85,7 +109,7 @@ def test_load_github_plugin_config(mock_load, temp_github_yaml_config):
     config = load_agent_config(temp_github_yaml_config)
 
     # Verify plugins were loaded correctly
-    assert len(config.plugins) == 3
+    assert len(config.plugins) == 4
 
     # Check first plugin (short format)
     plugin1 = config.plugins[0]
@@ -94,6 +118,7 @@ def test_load_github_plugin_config(mock_load, temp_github_yaml_config):
     assert plugin1.source.repo_url == "github.com/testuser/agently-plugin-hello"
     assert plugin1.source.version == "main"
     assert plugin1.variables == {"default_name": "TestFriend"}
+    assert plugin1.source.plugin_type == "sk"  # Default type is "sk"
 
     # Check second plugin (github.com format)
     plugin2 = config.plugins[1]
@@ -101,6 +126,7 @@ def test_load_github_plugin_config(mock_load, temp_github_yaml_config):
     assert plugin2.source.name == "world"
     assert plugin2.source.repo_url == "github.com/testuser/agently-plugin-world"
     assert plugin2.source.version == "v1.0.0"
+    assert plugin2.source.plugin_type == "sk"
 
     # Check third plugin (https URL format with plugin_path)
     plugin3 = config.plugins[2]
@@ -109,3 +135,13 @@ def test_load_github_plugin_config(mock_load, temp_github_yaml_config):
     assert plugin3.source.repo_url == "github.com/testuser/agently-plugin-advanced"
     assert plugin3.source.version == "main"
     assert plugin3.source.plugin_path == "plugins/advanced"
+    assert plugin3.source.plugin_type == "sk"
+    
+    # Check fourth plugin (MCP server type)
+    plugin4 = config.plugins[3]
+    assert plugin4.source.namespace == "testuser"
+    assert plugin4.source.name == "mcp-hello"
+    assert plugin4.source.repo_url.endswith("testuser/mcp-hello")
+    assert plugin4.source.version == "main"
+    assert plugin4.source.plugin_type == "mcp"
+    assert plugin4.variables == {"default_name": "MCPFriend"}

@@ -34,6 +34,13 @@ plugins:
     - source: "/absolute/path/to/plugin"
       variables:
         option: "value"
+    - source: "./plugins/mcp-server"
+      type: "mcp"
+      command: "python"
+      args:
+        - "server.py"
+      variables:
+        default_name: "MCPFriend"
 """
         )
     yield Path(temp_file.name)
@@ -74,11 +81,18 @@ def test_local_plugin_source_path_handling():
     # Test with relative path
     source1 = LocalPluginSource(Path("./plugins/hello"))
     assert source1.path.name == "hello"
+    assert source1.plugin_type == "sk"  # Default type is "sk"
 
     # Test with absolute path
     abs_path = Path("/absolute/path/to/plugin").resolve()
     source2 = LocalPluginSource(abs_path)
     assert source2.path == abs_path
+    assert source2.plugin_type == "sk"
+    
+    # Test with MCP type
+    source3 = LocalPluginSource(Path("./plugins/mcp-server"), plugin_type="mcp")
+    assert source3.path.name == "mcp-server"
+    assert source3.plugin_type == "mcp"
 
 
 @patch("agently.plugins.sources.importlib.util.spec_from_file_location")
@@ -152,19 +166,28 @@ def test_load_local_plugin_config(mock_load, mock_isabs, temp_local_yaml_config)
     config = load_agent_config(temp_local_yaml_config)
 
     # Verify plugins were loaded correctly
-    assert len(config.plugins) == 2
+    assert len(config.plugins) == 3
 
     # Check first plugin
     plugin1 = config.plugins[0]
     assert isinstance(plugin1.source, LocalPluginSource)
     assert plugin1.source.path.name == "hello"
     assert plugin1.variables == {"default_name": "TestFriend"}
+    assert plugin1.source.plugin_type == "sk"  # Default type is "sk"
 
     # Check second plugin
     plugin2 = config.plugins[1]
     assert isinstance(plugin2.source, LocalPluginSource)
     assert str(plugin2.source.path).endswith("to/plugin")
     assert plugin2.variables == {"option": "value"}
+    assert plugin2.source.plugin_type == "sk"
+    
+    # Check third plugin (MCP type)
+    plugin3 = config.plugins[2]
+    assert isinstance(plugin3.source, LocalPluginSource)
+    assert plugin3.source.path.name == "mcp-server"
+    assert plugin3.variables == {"default_name": "MCPFriend"}
+    assert plugin3.source.plugin_type == "mcp"
 
 
 def test_local_plugin_source_error_handling():

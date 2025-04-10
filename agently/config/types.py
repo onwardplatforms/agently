@@ -49,6 +49,22 @@ class CapabilityConfig:
 
 
 @dataclass
+class MCPServerConfig:
+    """Configuration for an MCP server."""
+
+    name: str
+    command: str
+    args: List[str] = field(default_factory=list)
+    description: str = ""
+    variables: Dict[str, Any] = field(default_factory=dict)
+    source_type: str = "local"  # "local" or "github"
+    source_path: Optional[str] = None  # Local path if source_type is "local"
+    repo_url: Optional[str] = None  # GitHub repo URL if source_type is "github"
+    version: Optional[str] = None  # GitHub version/tag if source_type is "github"
+    server_path: str = ""  # Path within GitHub repo if source_type is "github"
+
+
+@dataclass
 class AgentConfig:
     """Configuration for an agent."""
 
@@ -58,6 +74,7 @@ class AgentConfig:
     system_prompt: str
     model: ModelConfig
     plugins: List[PluginConfig] = field(default_factory=list)
+    mcp_servers: List[MCPServerConfig] = field(default_factory=list)
     capabilities: List[CapabilityConfig] = field(default_factory=list)
     log_level: int = LogLevel.NONE  # Default to no logging
     continuous_reasoning: bool = False  # Enable/disable continuous reasoning mode

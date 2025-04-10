@@ -135,6 +135,102 @@
                 }
             }
         },
+        "mcp_servers": {
+            "type": "object",
+            "description": "MCP server configurations for semantic kernel integration",
+            "properties": {
+                "local": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "required": [
+                            "name",
+                            "command",
+                            "args"
+                        ],
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Name of the MCP server"
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "Description of the MCP server's purpose and capabilities"
+                            },
+                            "command": {
+                                "type": "string",
+                                "description": "Command to run the MCP server (e.g., npx, uvx, docker)"
+                            },
+                            "args": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "description": "Arguments for the MCP server command"
+                            },
+                            "source": {
+                                "type": "string",
+                                "description": "Path to local MCP server files (if applicable)"
+                            },
+                            "variables": {
+                                "type": "object",
+                                "description": "Variables to pass to the MCP server"
+                            }
+                        }
+                    }
+                },
+                "github": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "required": [
+                            "source",
+                            "version",
+                            "command",
+                            "args"
+                        ],
+                        "properties": {
+                            "source": {
+                                "type": "string",
+                                "description": "GitHub repository source (can be 'user/name', 'github.com/user/name', or 'https://github.com/user/name')"
+                            },
+                            "version": {
+                                "type": "string",
+                                "description": "Version tag for the MCP server"
+                            },
+                            "name": {
+                                "type": "string",
+                                "description": "Name of the MCP server (defaults to repository name)"
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "Description of the MCP server's purpose and capabilities"
+                            },
+                            "command": {
+                                "type": "string",
+                                "description": "Command to run the MCP server (e.g., npx, uvx, docker)"
+                            },
+                            "args": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "description": "Arguments for the MCP server command"
+                            },
+                            "server_path": {
+                                "type": "string",
+                                "description": "Path within the repository where the MCP server is located",
+                                "default": ""
+                            },
+                            "variables": {
+                                "type": "object",
+                                "description": "Variables to pass to the MCP server"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "features": {
             "type": "object",
             "description": "Agent features configuration"

@@ -115,6 +115,10 @@ class Agent:
             # Initialize plugins
             await self._init_plugins()
             logger.debug("Plugins initialized")
+            
+            # Initialize MCP servers
+            await self._init_mcp_servers()
+            logger.debug("MCP servers initialized")
 
         except Exception as e:
             logger.error("Error initializing agent", extra={"error": str(e)}, exc_info=e)
@@ -125,6 +129,7 @@ class Agent:
                 recovery_hint="Check configuration and model availability",
             ) from e
 
+    # TODO: See about consolidating this with _init_mcp_servers
     async def _init_plugins(self) -> None:
         """Initialize agent plugins."""
         try:
@@ -191,6 +196,81 @@ class Agent:
                 recovery_hint="Check plugin configuration",
             ) from e
 
+    async def _init_mcp_servers(self) -> None:
+        """Initialize MCP servers for the agent."""
+        try:
+            context = await self._handle_agent_operation("init_mcp_servers")
+            logger.debug("Initializing MCP servers with context: %s", context)
+            
+            if not self.config.mcp_servers:
+                logger.info("No MCP servers configured, skipping initialization")
+                return
+            
+            # Import MCP server classes from semantic_kernel
+            try:
+                from semantic_kernel.connectors.mcp import MCPStdioPlugin, MCPSsePlugin
+                logger.debug("Successfully imported MCP server classes")
+            except ImportError as e:
+                logger.error(f"Failed to import MCP server classes: {e}")
+                raise ImportError(
+                    "Failed to import MCP server classes. Make sure semantic-kernel[mcp] is installed."
+                ) from e
+            
+            # Track open MCP server connections
+            self.mcp_server_connections = []
+            
+            # Initialize each MCP server
+            logger.info(f"Loading {len(self.config.mcp_servers)} MCP servers")
+            for i, mcp_config in enumerate(self.config.mcp_servers):
+                logger.debug(f"Loading MCP server {i+1}/{len(self.config.mcp_servers)}: {mcp_config.name}")
+                
+                try:
+                    # Check if this is an SSE-based MCP server (has URL)
+                    if hasattr(mcp_config, "url") and mcp_config.url:
+                        logger.debug(f"Initializing SSE-based MCP server with URL: {mcp_config.url}")
+                        mcp_server = MCPSsePlugin(
+                            name=mcp_config.name,
+                            description=mcp_config.description,
+                            url=mcp_config.url,
+                        )
+                    else:
+                        # This is a stdio-based MCP server
+                        logger.debug(f"Initializing stdio-based MCP server with command: {mcp_config.command}")
+                        mcp_server = MCPStdioPlugin(
+                            name=mcp_config.name,
+                            description=mcp_config.description,
+                            command=mcp_config.command,
+                            args=mcp_config.args,
+                        )
+                    
+                    # Connect to the MCP server
+                    logger.debug(f"Connecting to MCP server: {mcp_config.name}")
+                    await mcp_server.connect()
+                    
+                    # Track the connection for cleanup
+                    self.mcp_server_connections.append(mcp_server)
+                    
+                    # Add the MCP server to the kernel
+                    logger.debug(f"Adding MCP server to kernel: {mcp_config.name}")
+                    self.kernel.add_plugin(mcp_server)
+                    
+                    logger.info(f"MCP server loaded and connected: {mcp_config.name}")
+                    
+                except Exception as e:
+                    logger.error(f"Error initializing MCP server {mcp_config.name}: {e}", exc_info=e)
+                    raise
+            
+            logger.info(f"Successfully initialized {len(self.mcp_server_connections)} MCP servers")
+            
+        except Exception as e:
+            logger.error("Failed to initialize MCP servers", exc_info=e)
+            raise self._create_agent_error(
+                message="Failed to initialize MCP servers",
+                context=context,
+                cause=e,
+                recovery_hint="Check MCP server configuration",
+            ) from e
+
     async def _build_prompt_context(self, message: Message = None) -> str:
         """Build the prompt context for the agent.
 
@@ -224,6 +304,19 @@ class Agent:
             if plugin_instructions:
                 context += "\n\nAvailable plugins:\n" + "\n".join(plugin_instructions)
                 logger.debug(f"Added plugin instructions to context: {plugin_instructions}")
+        
+        # Add MCP server capabilities if we have any
+        if hasattr(self, 'mcp_server_connections') and self.mcp_server_connections:
+            mcp_instructions = []
+            for mcp_server in self.mcp_server_connections:
+                if hasattr(mcp_server, 'description') and mcp_server.description:
+                    mcp_instructions.append(f"{mcp_server.name}: {mcp_server.description}")
+                else:
+                    mcp_instructions.append(f"{mcp_server.name}: MCP server for external tool access")
+            
+            if mcp_instructions:
+                context += "\n\nAvailable MCP servers:\n" + "\n".join(mcp_instructions)
+                logger.debug(f"Added MCP server instructions to context: {mcp_instructions}")
 
         return context
 
@@ -871,3 +964,23 @@ class Agent:
         except Exception as e:
             logger.error(f"Error executing tool {tool_name}: {str(e)}", exc_info=True)
             return f"Error executing tool {tool_name}: {str(e)}"
+
+    async def close(self) -> None:
+        """Close resources held by the agent."""
+        logger.info(f"Closing agent resources: {self.id}")
+        
+        # Close MCP server connections
+        if hasattr(self, 'mcp_server_connections') and self.mcp_server_connections:
+            logger.info(f"Closing {len(self.mcp_server_connections)} MCP server connections")
+            for mcp_server in self.mcp_server_connections:
+                try:
+                    logger.debug(f"Closing MCP server connection: {mcp_server.name}")
+                    await mcp_server.close()
+                except Exception as e:
+                    logger.warning(f"Error closing MCP server {mcp_server.name}: {e}")
+            logger.info("All MCP server connections closed")
+            
+        # Clear provider and kernel references
+        self.provider = None
+        self.kernel = None
+        logger.info(f"Agent resources closed: {self.id}")

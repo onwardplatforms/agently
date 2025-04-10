@@ -1,0 +1,23 @@
+{
+  "plugins": {
+    "sk": {
+      "local/hellogoodbye": {
+        "namespace": "local",
+        "name": "hellogoodbye",
+        "full_name": "hellogoodbye",
+        "version": "local",
+        "source_type": "local",
+        "source_path": "servers/hello_goodbye_server.py",
+        "command": "python",
+        "args": [
+          "servers/hello_goodbye_server.py"
+        ],
+        "description": "A server that can say hello and goodbye to users",
+        "variables": {},
+        "sha256": "b0605fa07b99f9cc52c2a750bafb6d5d3e5d498c8e51ffcda598f2e4e9cfb07b",
+        "installed_at": "2025-04-10T17:40:22.163882"
+      }
+    },
+    "mcp": {}
+  }
+}

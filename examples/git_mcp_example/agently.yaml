@@ -1,0 +1,15 @@
+version: "1"
+name: "Git MCP Agent"
+system_prompt: "You are a helpful assistant that can interact with Git repositories. Use the Git tools available to you to help the user manage their repository."
+model:
+  provider: openai
+  model: gpt-4o
+  temperature: 0.7
+
+plugins:
+  github:
+    - source: "modelcontextprotocol/servers"
+      type: "mcp"
+      version: "main"
+      command: "uvx"
+      args: ["mcp-server-git", "--repository", "/Users/justinoconnor/Code/onward/agently"] 
