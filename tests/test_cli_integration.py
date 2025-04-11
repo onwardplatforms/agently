@@ -72,7 +72,7 @@ class TestPlugin(Plugin):
                             "source_type": "local",
                             "plugin_type": "sk",
                             "source_path": str(plugins_dir),
-                            "sha256": "test-sha",
+                            "sha": "test-sha",
                             "installed_at": "2023-01-01T00:00:00"
                         }
                     },
@@ -280,7 +280,7 @@ class TestSKPlugin(Plugin):
                             "source_type": "github",
                             "plugin_type": "sk",
                             "repo_url": "github.com/testuser/test-plugin",
-                            "commit_sha": "test-gh-sha",
+                            "sha": "test-gh-sha",
                             "installed_at": "2023-01-01T00:00:00"
                         }
                     },
@@ -306,9 +306,7 @@ class TestSKPlugin(Plugin):
                             "source_type": "github",
                             "plugin_type": "mcp",
                             "repo_url": "github.com/testuser/mcp-test",
-                            "command": "python",
-                            "args": ["server.py"],
-                            "commit_sha": "test-mcp-gh-sha",
+                            "sha": "test-mcp-gh-sha",
                             "installed_at": "2023-01-01T00:00:00"
                         }
                     }
@@ -373,7 +371,7 @@ def test_init_with_mcp_servers(
             "source_type": "github",
             "plugin_type": "sk",
             "repo_url": "github.com/testuser/test-plugin",
-            "commit_sha": "abc123",
+            "sha": "abc123",
             "installed_at": "2023-01-01T00:00:00"
         }
         
@@ -385,7 +383,7 @@ def test_init_with_mcp_servers(
             "source_type": "local",
             "plugin_type": "sk",
             "source_path": str(temp_mcp_project_dir / "plugins" / "local-sk"),
-            "sha256": "def456",
+            "sha": "def456",
             "installed_at": "2023-01-01T00:00:00"
         }
         

@@ -5,7 +5,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, Union
 from uuid import uuid4
 
 import jsonschema
@@ -158,7 +158,7 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
 
     # Create plugin configs
     plugin_configs = []
-    
+
     # Create MCP server configs
     mcp_server_configs = []
 
@@ -169,29 +169,28 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
     for local_plugin in plugins_yaml.get("local", []):
         # Determine plugin type (sk or mcp)
         plugin_type = local_plugin.get("type", "sk")  # Default to "sk" if not specified
-        
+
         # Resolve relative path from config file location
         plugin_path = local_plugin["source"]
         if not os.path.isabs(plugin_path):
             plugin_path = (config_path.parent / plugin_path).resolve()
 
         local_source: PluginSourceType = LocalPluginSource(
-            path=Path(plugin_path),
-            plugin_type=plugin_type  # Set the plugin type
+            path=Path(plugin_path), plugin_type=plugin_type  # Set the plugin type
         )
-        
+
         # For MCP type plugins, handle MCP-specific fields
         if plugin_type == "mcp":
             # Note: MCP servers are treated as plugins for installation/management,
             # but also need separate MCPServerConfig objects for runtime initialization.
             # That's why we create both a PluginConfig (for unified plugin management)
             # and an MCPServerConfig (for backward compatibility and runtime usage).
-            
+
             # Create both a plugin config and an MCP server config
             if "command" in local_plugin and "args" in local_plugin:
                 # Get the source object's name for the MCP server
                 name = local_plugin.get("name", Path(plugin_path).stem)
-                
+
                 mcp_server_configs.append(
                     MCPServerConfig(
                         name=name,
@@ -203,7 +202,7 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
                         source_path=str(plugin_path),
                     )
                 )
-                
+
                 # Also add to plugin_configs for initialization
                 plugin_configs.append(PluginConfig(source=local_source, variables=local_plugin.get("variables", {})))
         else:
@@ -214,7 +213,7 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
     for github_plugin in plugins_yaml.get("github", []):
         # Determine plugin type (sk or mcp)
         plugin_type = github_plugin.get("type", "sk")  # Default to "sk" if not specified
-        
+
         github_source: PluginSourceType = GitHubPluginSource(
             repo_url=github_plugin["source"],
             version=github_plugin.get("version", "main"),  # Default to main if not specified
@@ -223,20 +222,20 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
             name=github_plugin.get("name", ""),
             plugin_type=plugin_type,  # Set the plugin type
         )
-        
+
         # If it's an MCP server, set additional properties
         if github_source.plugin_type == "mcp":
-            setattr(github_source, 'command', github_plugin.get("command", "python"))
-            setattr(github_source, 'args', github_plugin.get("args", []))
-            setattr(github_source, 'description', github_plugin.get("description", ""))
-            setattr(github_source, 'server_path', github_plugin.get("server_path", ""))
-            
+            setattr(github_source, "command", github_plugin.get("command", "python"))
+            setattr(github_source, "args", github_plugin.get("args", []))
+            setattr(github_source, "description", github_plugin.get("description", ""))
+            setattr(github_source, "server_path", github_plugin.get("server_path", ""))
+
             # Note: MCP servers are treated as plugins for installation/management,
             # but also need separate MCPServerConfig objects for runtime initialization.
             # That's why we create both a PluginConfig (for unified plugin management)
             # and an MCPServerConfig (for backward compatibility and runtime usage).
             name = github_source.name
-            
+
             mcp_server_configs.append(
                 MCPServerConfig(
                     name=name,
@@ -245,17 +244,17 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
                     description=github_plugin.get("description", ""),
                     variables=github_plugin.get("variables", {}),
                     source_type="github",
-                    repo_url=github_source.repo_url,
-                    version=github_source.version,
+                    repo_url=github_source.repo_url if hasattr(github_source, "repo_url") else None,
+                    version=github_source.version if hasattr(github_source, "version") else None,
                     server_path=github_plugin.get("server_path", ""),
                 )
             )
-        
+
         plugin_configs.append(PluginConfig(source=github_source, variables=github_plugin.get("variables", {})))
 
     # Process MCP servers by type
     mcp_servers_yaml = yaml_config.get("mcp_servers", {})
-    
+
     # Process local MCP servers
     for local_mcp in mcp_servers_yaml.get("local", []):
         source_path = None
@@ -263,7 +262,7 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
             source_path = local_mcp["source"]
             if not os.path.isabs(source_path):
                 source_path = str((config_path.parent / source_path).resolve())
-        
+
         mcp_server_configs.append(
             MCPServerConfig(
                 name=local_mcp["name"],
@@ -275,7 +274,7 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
                 source_path=source_path,
             )
         )
-    
+
     # Process GitHub MCP servers
     for github_mcp in mcp_servers_yaml.get("github", []):
         name = github_mcp.get("name", "")
@@ -287,8 +286,8 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
                 name = source.split("/")[-1]
                 # Remove agently-mcp- prefix if it exists
                 if name.startswith("agently-mcp-"):
-                    name = name[len("agently-mcp-"):]
-        
+                    name = name[len("agently-mcp-") :]
+
         mcp_server_configs.append(
             MCPServerConfig(
                 name=name,
@@ -305,7 +304,7 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
 
     # Set log level
     log_level = LogLevel.NONE  # Default
-    
+
     # Check for continuous reasoning flag
     continuous_reasoning = yaml_config.get("continuous_reasoning", False)
 

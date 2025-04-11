@@ -4,11 +4,9 @@ This module provides the core Agent class that manages individual agent behavior
 including initialization, plugin management, and message processing.
 """
 
+import inspect
 import logging
 from typing import Any, AsyncGenerator, Dict, List, Optional
-import inspect
-import random
-import asyncio
 
 from semantic_kernel import Kernel
 from semantic_kernel.contents.streaming_chat_message_content import (
@@ -17,13 +15,13 @@ from semantic_kernel.contents.streaming_chat_message_content import (
 from semantic_kernel.contents.utils.author_role import AuthorRole
 from semantic_kernel.exceptions.content_exceptions import ContentAdditionException
 
+from agently.agents.prompts import CONTINUOUS_REASONING_PROMPT, DEFAULT_PROMPT
+from agently.agents.reasoning import ReasoningChain
 from agently.config.types import AgentConfig
 from agently.conversation.context import ConversationContext, Message
 from agently.core import get_error_handler
-from agently.errors import AgentError, AgentRuntimeError, ErrorContext, ErrorSeverity, RetryConfig, RetryHandler
+from agently.errors import AgentError, ErrorContext, RetryConfig, RetryHandler
 from agently.models.base import ModelProvider
-from agently.agents.reasoning import ReasoningChain
-from agently.agents.prompts import DEFAULT_PROMPT, CONTINUOUS_REASONING_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +113,7 @@ class Agent:
             # Initialize plugins
             await self._init_plugins()
             logger.debug("Plugins initialized")
-            
+
             # Initialize MCP servers
             await self._init_mcp_servers()
             logger.debug("MCP servers initialized")
@@ -201,34 +199,35 @@ class Agent:
         try:
             context = await self._handle_agent_operation("init_mcp_servers")
             logger.debug("Initializing MCP servers with context: %s", context)
-            
+
             if not self.config.mcp_servers:
                 logger.info("No MCP servers configured, skipping initialization")
                 return
-            
+
             # Import MCP server classes from semantic_kernel
             try:
-                from semantic_kernel.connectors.mcp import MCPStdioPlugin, MCPSsePlugin
+                from semantic_kernel.connectors.mcp import MCPSsePlugin, MCPStdioPlugin
+
                 logger.debug("Successfully imported MCP server classes")
             except ImportError as e:
                 logger.error(f"Failed to import MCP server classes: {e}")
-                raise ImportError(
-                    "Failed to import MCP server classes. Make sure semantic-kernel[mcp] is installed."
-                ) from e
-            
+                raise ImportError("Failed to import MCP server classes. Make sure semantic-kernel[mcp] is installed.") from e
+
             # Track open MCP server connections
             self.mcp_server_connections = []
-            
+
             # Initialize each MCP server
             logger.info(f"Loading {len(self.config.mcp_servers)} MCP servers")
             for i, mcp_config in enumerate(self.config.mcp_servers):
                 logger.debug(f"Loading MCP server {i+1}/{len(self.config.mcp_servers)}: {mcp_config.name}")
-                
+
                 try:
-                    # Check if this is an SSE-based MCP server (has URL)
-                    if hasattr(mcp_config, "url") and mcp_config.url:
-                        logger.debug(f"Initializing SSE-based MCP server with URL: {mcp_config.url}")
-                        mcp_server = MCPSsePlugin(
+                    # Initialize an MCP server based on type
+                    mcp_server_instance: Any = None
+                    if hasattr(mcp_config, "url"):
+                        # This is a URL-based MCP server
+                        logger.debug(f"Initializing URL-based MCP server with URL: {mcp_config.url}")
+                        mcp_server_instance = MCPSsePlugin(
                             name=mcp_config.name,
                             description=mcp_config.description,
                             url=mcp_config.url,
@@ -236,32 +235,32 @@ class Agent:
                     else:
                         # This is a stdio-based MCP server
                         logger.debug(f"Initializing stdio-based MCP server with command: {mcp_config.command}")
-                        mcp_server = MCPStdioPlugin(
+                        mcp_server_instance = MCPStdioPlugin(
                             name=mcp_config.name,
                             description=mcp_config.description,
                             command=mcp_config.command,
                             args=mcp_config.args,
                         )
-                    
+
                     # Connect to the MCP server
                     logger.debug(f"Connecting to MCP server: {mcp_config.name}")
-                    await mcp_server.connect()
-                    
+                    await mcp_server_instance.connect()
+
                     # Track the connection for cleanup
-                    self.mcp_server_connections.append(mcp_server)
-                    
+                    self.mcp_server_connections.append(mcp_server_instance)
+
                     # Add the MCP server to the kernel
                     logger.debug(f"Adding MCP server to kernel: {mcp_config.name}")
-                    self.kernel.add_plugin(mcp_server)
-                    
+                    self.kernel.add_plugin(mcp_server_instance)
+
                     logger.info(f"MCP server loaded and connected: {mcp_config.name}")
-                    
+
                 except Exception as e:
                     logger.error(f"Error initializing MCP server {mcp_config.name}: {e}", exc_info=e)
                     raise
-            
+
             logger.info(f"Successfully initialized {len(self.mcp_server_connections)} MCP servers")
-            
+
         except Exception as e:
             logger.error("Failed to initialize MCP servers", exc_info=e)
             raise self._create_agent_error(
@@ -282,16 +281,16 @@ class Agent:
         """
         # Start with the system prompt from configuration
         system_prompt = getattr(self.config, "system_prompt", "")
-        
+
         # Determine if we should use continuous reasoning mode
         use_continuous_reasoning = getattr(self.config, "continuous_reasoning", False)
-        
+
         # Select the appropriate prompt template
         if use_continuous_reasoning:
             context = CONTINUOUS_REASONING_PROMPT.format(system_prompt=system_prompt)
         else:
             context = DEFAULT_PROMPT.format(system_prompt=system_prompt)
-            
+
         logger.debug("Building prompt context starting with system prompt")
 
         # Add plugin instructions if we have plugins
@@ -304,16 +303,16 @@ class Agent:
             if plugin_instructions:
                 context += "\n\nAvailable plugins:\n" + "\n".join(plugin_instructions)
                 logger.debug(f"Added plugin instructions to context: {plugin_instructions}")
-        
+
         # Add MCP server capabilities if we have any
-        if hasattr(self, 'mcp_server_connections') and self.mcp_server_connections:
+        if hasattr(self, "mcp_server_connections") and self.mcp_server_connections:
             mcp_instructions = []
             for mcp_server in self.mcp_server_connections:
-                if hasattr(mcp_server, 'description') and mcp_server.description:
+                if hasattr(mcp_server, "description") and mcp_server.description:
                     mcp_instructions.append(f"{mcp_server.name}: {mcp_server.description}")
                 else:
                     mcp_instructions.append(f"{mcp_server.name}: MCP server for external tool access")
-            
+
             if mcp_instructions:
                 context += "\n\nAvailable MCP servers:\n" + "\n".join(mcp_instructions)
                 logger.debug(f"Added MCP server instructions to context: {mcp_instructions}")
@@ -426,9 +425,7 @@ class Agent:
                                         logger.debug(f"Other message type with role {msg.role}: {msg}")
                     except ContentAdditionException as e:
                         # Handle the ContentAdditionException gracefully - log at debug level instead of warning
-                        logger.debug(
-                            f"ContentAdditionException occurred: {e}. This is expected when mixing message roles."
-                        )
+                        logger.debug(f"ContentAdditionException occurred: {e}. This is expected when mixing message roles.")
                         # Log more details about the exception at debug level
                         logger.debug(f"Exception details: {str(e)}")
                         logger.debug(f"Exception type: {type(e).__name__}")
@@ -512,7 +509,7 @@ class Agent:
         self, message: Message, context: ConversationContext
     ) -> AsyncGenerator[str, None]:
         """Process a message with continuous reasoning.
-        
+
         This method allows the agent to "think out loud", showing its reasoning
         process between tool calls and providing a window into its decision-making.
 
@@ -525,7 +522,7 @@ class Agent:
         """
         # Initialize operation_context to None before the try block
         operation_context = None
-        
+
         # Create a reasoning chain to track the agent's thought process
         reasoning_chain = ReasoningChain()
 
@@ -612,55 +609,55 @@ class Agent:
                                         # Process the chunk content
                                         chunk_text = str(msg)
                                         assistant_response += chunk_text
-                                        
+
                                         # Check for thinking/answer tags
                                         if "<thinking>" in chunk_text:
                                             in_thinking_block = True
                                             # Extract just the content after the tag
                                             chunk_text = chunk_text.split("<thinking>", 1)[1]
-                                            
+
                                         if "</thinking>" in chunk_text and in_thinking_block:
                                             # Extract just the content before the closing tag
                                             parts = chunk_text.split("</thinking>", 1)
                                             current_thinking += parts[0]
                                             in_thinking_block = False
-                                            
+
                                             # Add the completed thinking to the reasoning chain
                                             reasoning_chain.add_reasoning(current_thinking)
                                             current_thinking = ""
-                                            
+
                                             # Yield the thinking as it is completed
                                             yield f"Thinking: {current_thinking}\n"
-                                            
+
                                             # Set the remainder for further processing
                                             if len(parts) > 1:
                                                 chunk_text = parts[1]
                                             else:
                                                 chunk_text = ""
-                                            
+
                                         if "<answer>" in chunk_text:
                                             in_answer_block = True
                                             # Extract just the content after the tag
                                             chunk_text = chunk_text.split("<answer>", 1)[1]
-                                            
+
                                         if "</answer>" in chunk_text and in_answer_block:
                                             # Extract just the content before the closing tag
                                             parts = chunk_text.split("</answer>", 1)
                                             final_answer += parts[0]
                                             in_answer_block = False
-                                            
+
                                             # Add the completed answer to the reasoning chain
                                             reasoning_chain.add_response(final_answer)
-                                            
+
                                             # Yield the final answer
                                             yield f"Answer: {final_answer}\n"
-                                            
+
                                             # Set the remainder for further processing
                                             if len(parts) > 1:
                                                 chunk_text = parts[1]
                                             else:
                                                 chunk_text = ""
-                                            
+
                                         # Add to current block based on state
                                         if in_thinking_block:
                                             current_thinking += chunk_text
@@ -671,7 +668,7 @@ class Agent:
                                         else:
                                             # This is regular text outside blocks, yield it
                                             yield chunk_text
-                                        
+
                                     elif msg.role == AuthorRole.TOOL:
                                         # This is a tool/function message - process it
                                         logger.debug(f"Tool message received: {msg}")
@@ -681,9 +678,7 @@ class Agent:
                                         logger.debug(f"Other message type with role {msg.role}: {msg}")
                     except ContentAdditionException as e:
                         # Handle the ContentAdditionException gracefully - log at debug level instead of warning
-                        logger.debug(
-                            f"ContentAdditionException occurred: {e}. This is expected when mixing message roles."
-                        )
+                        logger.debug(f"ContentAdditionException occurred: {e}. This is expected when mixing message roles.")
                         # Log more details about the exception at debug level
                         logger.debug(f"Exception details: {str(e)}")
                         logger.debug(f"Exception type: {type(e).__name__}")
@@ -700,36 +695,49 @@ class Agent:
                             # Process each tool call
                             for i, tool_message in enumerate(tool_messages):
                                 logger.debug(f"Processing tool message {i}: {tool_message}")
-                                
+
                                 # Extract tool name and input
                                 tool_name = tool_message.get("name", "unknown_tool")
+                                # Ensure tool_name is always a string
+                                if not isinstance(tool_name, str):
+                                    tool_name = str(tool_name)
                                 tool_input = tool_message.get("arguments", {})
-                                
+                                if not isinstance(tool_input, dict):
+                                    tool_input = {} if tool_input is None else {"input": tool_input}
+
                                 logger.debug(f"Extracted tool_name: {tool_name}, type: {type(tool_name)}")
-                                
+
                                 # Execute the tool and get result
                                 tool_result = await self._execute_tool(tool_name, tool_input)
-                                
-                                # Add to reasoning chain
-                                reasoning_chain.add_tool_call(tool_name, tool_input, tool_result)
-                                
+
+                                # Add to reasoning chain - ensure tool_name is a string
+                                reasoning_chain.add_tool_call(
+                                    tool_name=str(tool_name) if not isinstance(tool_name, str) else tool_name,
+                                    tool_input=tool_input,
+                                    tool_result=tool_result,
+                                )
+
                                 # Yield the tool call information
                                 yield f"Tool call: {tool_name}\nInput: {tool_input}\nResult: {tool_result}\n"
-                                
+
                                 # Check if the tool call failed due to missing parameters
-                                if isinstance(tool_result, str) and tool_result.startswith("Error: Missing required parameters"):
+                                if isinstance(tool_result, str) and tool_result.startswith(
+                                    "Error: Missing required parameters"
+                                ):
                                     # Feed the error back to the LLM to allow it to retry
                                     logger.debug(f"Tool call failed, feeding error back to LLM: {tool_result}")
                                     yield f"The tool call failed. {tool_result}\n"
-                                    
+
                                     # Instead of trying to invoke the kernel again with a new message,
                                     # we'll just yield a message prompting the agent to try again
                                     # This avoids the StreamingChatMessageContent role conflict
-                                    yield f"\nPlease try again with the correct parameters for {tool_name}. You need to provide: {tool_result.split(':', 2)[2].strip()}\n"
-                                    
+                                    params_msg = f"\nPlease try again with the correct parameters for {tool_name}. "
+                                    error_details = f"You need to provide: {tool_result.split(':', 2)[2].strip()}\n"
+                                    yield params_msg + error_details
+
                                     # We don't need to add a new message to the context or invoke the kernel again
                                     # The agent will see this message in the next turn and can respond appropriately
-                                
+
                         except Exception as e:
                             logger.error(f"Error processing tool messages: {str(e)}", exc_info=True)
                             yield f"\n\nError processing tool calls: {str(e)}"
@@ -740,11 +748,11 @@ class Agent:
                         complete_response = final_answer
                     else:
                         complete_response = assistant_response
-                    
+
                     if complete_response:
                         logger.debug(f"Adding assistant response to history: {complete_response[:50]}...")
                         await context.add_message(Message(content=complete_response, role="assistant"))
-                
+
                 except Exception as e:
                     logger.error("Error executing chat function", exc_info=e)
                     yield f"\n\nError executing chat function: {str(e)}"
@@ -766,44 +774,45 @@ class Agent:
                     },
                 )
 
-            logger.error("Error processing message with continuous reasoning", 
-                         extra={"error": str(e)}, exc_info=e)
+            logger.error("Error processing message with continuous reasoning", extra={"error": str(e)}, exc_info=e)
 
             if isinstance(e, AgentError):
                 raise
 
-            error = self._create_agent_error(
+            # Create an agent error with proper context (but don't store the result since we don't use it)
+            self._create_agent_error(
                 message="Error processing message with continuous reasoning",
                 context=operation_context,
                 cause=e,
                 recovery_hint="Try rephrasing your message or check agent status",
             )
-    
+
     def _extract_tool_messages(self, result: Any) -> List[Dict[str, Any]]:
         """Extract tool messages from the result.
-        
+
         This is a helper method to extract tool calls from the model response.
-        
+
         Args:
             result: The result from the model
-            
+
         Returns:
             A list of tool message dictionaries
         """
-        tool_messages = []
-        
+        # Explicitly annotate the type to avoid confusion
+        tool_messages: List[Dict[str, Any]] = []
+
         # Add debug logging for the result
         logger.debug(f"_extract_tool_messages received result type: {type(result)}")
-        logger.debug(f"==== EXTRACT TOOL MESSAGES ====")
+        logger.debug("==== EXTRACT TOOL MESSAGES ====")
         logger.debug(f"Result type: {type(result)}")
-        
+
         # Check if the result is a list of messages
         if isinstance(result, list):
             logger.debug(f"Result is a list with {len(result)} items")
             for i, item in enumerate(result):
                 # Only log the item type, not the full content which could be very verbose
                 logger.debug(f"Processing item {i}, type: {type(item)}")
-                
+
                 # Look for tool calls in message content
                 if hasattr(item, "role") and getattr(item, "role") == "tool":
                     logger.debug(f"Found tool message at index {i}")
@@ -811,18 +820,18 @@ class Agent:
                     if hasattr(item, "name"):
                         tool_name = getattr(item, "name", "unknown_tool")
                         tool_args = getattr(item, "arguments", {})
+                        # Ensure tool_name is always a string
+                        if not isinstance(tool_name, str):
+                            tool_name = str(tool_name)
                         logger.debug(f"Extracted tool name: {tool_name}, type: {type(tool_name)}")
                         # Only add tool messages with valid names
                         if tool_name is not None:
-                            tool_messages.append({
-                                "name": tool_name,
-                                "arguments": tool_args
-                            })
+                            tool_messages.append({"name": str(tool_name), "arguments": tool_args})
                         else:
-                            logger.debug(f"Skipping tool message with None name")
+                            logger.debug("Skipping tool message with None name")
                     else:
-                        logger.debug(f"Tool message at index {i} has no 'name' attribute")
-                    
+                        logger.debug("Tool message at index {} has no 'name' attribute".format(i))
+
                     # Also check inside items if there's a nested structure
                     if hasattr(item, "items"):
                         items_list = getattr(item, "items", [])
@@ -831,71 +840,78 @@ class Agent:
                             if hasattr(sub_item, "function_name"):
                                 tool_name = getattr(sub_item, "function_name", "unknown_tool")
                                 tool_args = getattr(sub_item, "function_parameters", {})
+                                # Ensure tool_name is always a string
+                                if not isinstance(tool_name, str):
+                                    tool_name = str(tool_name)
                                 logger.debug(f"Extracted nested tool name: {tool_name}, type: {type(tool_name)}")
                                 # Only add tool messages with valid names
                                 if tool_name is not None:
-                                    tool_messages.append({
-                                        "name": tool_name,
-                                        "arguments": tool_args
-                                    })
+                                    tool_messages.append({"name": str(tool_name), "arguments": tool_args})
                                 else:
-                                    logger.debug(f"Skipping nested tool message with None name")
+                                    logger.debug("Skipping nested tool message with None name")
                             else:
                                 logger.debug(f"Sub-item {j} has no 'function_name' attribute")
-                
-                elif hasattr(item, "items") and not (hasattr(item, "role") and getattr(item, "role") == "tool"):
+
+                # Split the non-tool nested tool message checking to avoid long lines
+                if hasattr(item, "items") and not (hasattr(item, "role") and getattr(item, "role") == "tool"):
                     # Check for tool calls in items even if the parent is not a tool message
                     items_list = getattr(item, "items", [])
                     if items_list:
-                        logger.debug(f"Non-tool message at index {i} has 'items' attribute with {len(items_list)} items")
+                        msg = f"Non-tool message at index {i} has 'items' attribute with {len(items_list)} items"
+                        logger.debug(msg)
+
                         for j, sub_item in enumerate(items_list):
                             if hasattr(sub_item, "function_name"):
                                 tool_name = getattr(sub_item, "function_name", "unknown_tool")
                                 tool_args = getattr(sub_item, "function_parameters", {})
-                                logger.debug(f"Extracted non-tool nested tool name: {tool_name}, type: {type(tool_name)}")
+                                # Ensure tool_name is always a string
+                                if not isinstance(tool_name, str):
+                                    tool_name = str(tool_name)
+                                msg = f"Extracted non-tool nested tool name: {tool_name}, type: {type(tool_name)}"
+                                logger.debug(msg)
+
                                 # Only add tool messages with valid names
                                 if tool_name is not None:
-                                    tool_messages.append({
-                                        "name": tool_name,
-                                        "arguments": tool_args
-                                    })
+                                    tool_messages.append({"name": str(tool_name), "arguments": tool_args})
                                 else:
-                                    logger.debug(f"Skipping non-tool nested tool message with None name")
+                                    logger.debug("Skipping non-tool nested tool message with None name")
         else:
-            logger.debug(f"Result is not a list, cannot extract tool messages")
-        
+            logger.debug("Result is not a list, cannot extract tool messages")
+
         logger.debug(f"==== FINAL EXTRACTED TOOL MESSAGES: {len(tool_messages)} ====")
-        for i, msg in enumerate(tool_messages):
-            logger.debug(f"Tool message {i}: {msg}")
+        # Add type: ignore to suppress mypy error about dict vs str type incompatibility
+        for i, msg in enumerate(tool_messages):  # type: ignore
+            # Use str() to ensure we're logging a string representation of the message
+            logger.debug(f"Tool message {i}: {str(msg)}")
         return tool_messages
-        
+
     async def _execute_tool(self, tool_name: str, tool_input: Dict[str, Any]) -> Any:
         """Execute a tool and get the result.
-        
+
         Args:
             tool_name: The name of the tool to execute
             tool_input: The input parameters for the tool
-            
+
         Returns:
             The result of the tool execution
         """
-        logger.debug(f"==== EXECUTE TOOL ====")
+        logger.debug("==== EXECUTE TOOL ====")
         logger.debug(f"Tool name: {tool_name}, type: {type(tool_name)}")
-        
+
         if not self.plugin_manager:
             logger.warning("No plugin manager available, cannot execute tools")
             return f"Error: No plugin manager available to execute {tool_name}"
-            
+
         try:
             # Check if tool_name is None
             if tool_name is None:
                 logger.error("Tool name is None, cannot execute tool")
                 return "Error: Tool name is None, cannot execute tool"
-                
+
             # Try to find the tool in the plugin manager
             tool_parts = tool_name.split(".")
             logger.debug(f"Split tool_name into parts: {tool_parts}")
-            
+
             if len(tool_parts) > 1:
                 # Format: plugin_name.function_name
                 plugin_name = tool_parts[0]
@@ -906,16 +922,12 @@ class Agent:
                 plugin_name = None
                 function_name = tool_name
                 logger.debug(f"No plugin specified, using function_name: {function_name}")
-                
+
             # Execute the function through the plugin manager
             if plugin_name:
                 # Try to get the result using the specific plugin
                 logger.debug(f"Executing tool {function_name} in plugin {plugin_name}")
-                result = await self.plugin_manager.execute_plugin_function(
-                    plugin_name, 
-                    function_name,
-                    **tool_input
-                )
+                result = await self.plugin_manager.execute_plugin(plugin_name, function_name, **tool_input)
                 return result
             else:
                 # Try to find the function in any plugin
@@ -926,7 +938,7 @@ class Agent:
                         func = getattr(plugin_instance, function_name)
                         is_coroutine = inspect.iscoroutinefunction(func)
                         logger.debug(f"Function is coroutine: {is_coroutine}")
-                        
+
                         try:
                             if is_coroutine:
                                 logger.debug(f"Executing async function {function_name}")
@@ -934,33 +946,41 @@ class Agent:
                             else:
                                 logger.debug(f"Executing sync function {function_name}")
                                 import asyncio
+
                                 result = await asyncio.to_thread(func, **tool_input)
-                                
+
                             return result
                         except TypeError as e:
                             # This is likely a parameter error
                             error_msg = str(e)
                             logger.warning(f"Parameter error executing function {function_name}: {error_msg}")
-                            
+
                             # Check if this is a missing parameter error
                             if "missing" in error_msg and "required" in error_msg and "argument" in error_msg:
                                 # Extract the missing parameter name(s)
                                 import re
+
                                 missing_params = re.findall(r"'(\w+)'", error_msg)
-                                
+
                                 # Return a helpful error message that the LLM can use to correct its call
-                                return f"Error: Missing required parameters for {function_name}: {', '.join(missing_params)}. Please provide values for these parameters and try again."
-                            
+                                return_msg = "Error: Missing required parameters for {}: {}. ".format(
+                                    function_name, ", ".join(missing_params)
+                                )
+                                return_msg += "Please provide values for these parameters and try again."
+                                return return_msg
+
                             # Other TypeError
-                            return f"Error: Invalid parameters for {function_name}: {error_msg}. Please check parameter types and values."
+                            error_details = f"Error: Invalid parameters for {function_name}: {error_msg}. "
+                            error_details += "Please check parameter types and values."
+                            return error_details
                         except Exception as e:
                             logger.error(f"Error executing function {function_name}: {str(e)}")
                             return f"Error executing function {function_name}: {str(e)}"
-                
+
                 # If we get here, we didn't find the function
                 logger.error(f"Tool {function_name} not found in any plugin")
                 return f"Error: Tool {function_name} not found"
-                
+
         except Exception as e:
             logger.error(f"Error executing tool {tool_name}: {str(e)}", exc_info=True)
             return f"Error executing tool {tool_name}: {str(e)}"
@@ -968,9 +988,9 @@ class Agent:
     async def close(self) -> None:
         """Close resources held by the agent."""
         logger.info(f"Closing agent resources: {self.id}")
-        
+
         # Close MCP server connections
-        if hasattr(self, 'mcp_server_connections') and self.mcp_server_connections:
+        if hasattr(self, "mcp_server_connections") and self.mcp_server_connections:
             logger.info(f"Closing {len(self.mcp_server_connections)} MCP server connections")
             for mcp_server in self.mcp_server_connections:
                 try:
@@ -979,7 +999,7 @@ class Agent:
                 except Exception as e:
                     logger.warning(f"Error closing MCP server {mcp_server.name}: {e}")
             logger.info("All MCP server connections closed")
-            
+
         # Clear provider and kernel references
         self.provider = None
         self.kernel = None

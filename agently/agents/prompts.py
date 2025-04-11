@@ -43,4 +43,4 @@ REMEMBER:
 - Tools are called directly without any special formatting.
 - Only use <answer> when you have a complete response to the user's request.
 - Your response should be detailed and helpful, showing your work clearly.
-""" 
+"""

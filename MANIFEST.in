@@ -1,0 +1,12 @@
+include LICENSE
+include README.md
+include CONTRIBUTING.md
+include VERSIONING.md
+include CHANGELOG.md
+include requirements.txt
+include requirements-dev.txt
+include pyproject.toml
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude *.so
+global-exclude .DS_Store 

@@ -2,7 +2,7 @@ pytest
 pytest-cov
 pytest-mock
 pytest-asyncio
-click
+pytest-timeout
 black
 flake8
 flake8-docstrings
@@ -12,4 +12,6 @@ pre-commit
 pydantic
 types-requests
 autoflake
-pytest-timeout
+types-jsonschema
+types-PyYAML
+-e .

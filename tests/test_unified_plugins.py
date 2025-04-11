@@ -406,7 +406,7 @@ def test_initialize_plugins_with_mocking():
                 "namespace": "testuser", 
                 "name": "plugin1", 
                 "plugin_type": "sk", 
-                "commit_sha": "abc123"
+                "sha": "abc123"
             }
             mock_source.load.return_value = MagicMock()
         elif 'mcp-hello' in repo_url:
@@ -418,7 +418,7 @@ def test_initialize_plugins_with_mocking():
                 "namespace": "testuser", 
                 "name": "mcp-hello", 
                 "plugin_type": "mcp", 
-                "commit_sha": "def456"
+                "sha": "def456"
             }
             mock_source.load.return_value = MagicMock()
         else:
@@ -431,7 +431,7 @@ def test_initialize_plugins_with_mocking():
                 "namespace": "testuser", 
                 "name": "unknown", 
                 "plugin_type": plugin_type, 
-                "commit_sha": "abc123"
+                "sha": "abc123"
             }
             mock_source.load.return_value = MagicMock()
             
@@ -461,7 +461,7 @@ def test_initialize_plugins_with_mocking():
                 "namespace": "local", 
                 "name": "local1", 
                 "plugin_type": "sk", 
-                "sha256": "ghi789"
+                "sha": "def456"
             }
             mock_source.load.return_value = MagicMock()
         elif name == "mcp-server":
@@ -473,7 +473,7 @@ def test_initialize_plugins_with_mocking():
                 "namespace": "local", 
                 "name": "mcp-server", 
                 "plugin_type": "mcp", 
-                "sha256": "jkl012"
+                "sha": "jkl012"
             }
             mock_source.load.return_value = MagicMock()
         else:
@@ -486,7 +486,7 @@ def test_initialize_plugins_with_mocking():
                 "namespace": "local", 
                 "name": "unknown", 
                 "plugin_type": plugin_type, 
-                "sha256": "def456"
+                "sha": "def456"
             }
             mock_source.load.return_value = MagicMock()
             
@@ -534,4 +534,16 @@ def test_initialize_plugins_with_mocking():
         
         # Verify that local plugins are recorded in the right sections
         assert "local/local1" in lockfile_data["plugins"]["sk"]
-        assert "local/mcp-server" in lockfile_data["plugins"]["mcp"] 
+        assert "local/mcp-server" in lockfile_data["plugins"]["mcp"]
+
+        # Verify the structure matches expected
+        assert lockfile_data["plugins"] == {
+            "sk": {
+                "local/local1": {"namespace": "local", "name": "local1", "plugin_type": "sk", "sha": "def456"},
+                "testuser/plugin1": {"namespace": "testuser", "name": "plugin1", "plugin_type": "sk", "sha": "abc123"},
+            },
+            "mcp": {
+                "local/mcp-server": {"namespace": "local", "name": "mcp-server", "plugin_type": "mcp", "sha": "jkl012"},
+                "testuser/mcp-hello": {"namespace": "testuser", "name": "mcp-hello", "plugin_type": "mcp", "sha": "def456"},
+            },
+        } 

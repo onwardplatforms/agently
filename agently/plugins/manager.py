@@ -213,7 +213,8 @@ class PluginManager:
             The loaded plugin instance
         """
         logger.info(f"Loading plugin from path: {path}")
-        source = LocalPluginSource(Path(path))
+        path_obj = Path(path) if isinstance(path, str) else path
+        source = LocalPluginSource(path=path_obj)
         return await self.load_plugin(source, variables)
 
     def get_openai_functions(self) -> Dict[str, Any]:
