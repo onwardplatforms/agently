@@ -16,6 +16,7 @@ from agently_sdk import styles  # Import styles directly from SDK
 from agently.config.parser import load_agent_config
 from agently.plugins.sources import GitHubPluginSource, LocalPluginSource
 from agently.utils.logging import LogLevel, configure_logging
+from agently.version import __version__
 
 from .interactive import interactive_loop
 
@@ -359,6 +360,12 @@ def list(log_level):
         click.echo(f"Error: {e}")
         logger.exception(f"Error listing plugins: {e}")
         sys.exit(1)
+
+
+@cli.command()
+def version():
+    """Display the version of Agently."""
+    click.echo(f"Agently version {__version__}")
 
 
 def _initialize_plugins(config_path, quiet=False, force=False):

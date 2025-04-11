@@ -101,7 +101,7 @@ dist: clean-dist build
 
 release: clean-dist build
 	$(ACTIVATE) twine check dist/*
-	$(ACTIVATE) twine upload dist/*
+	$(ACTIVATE) TWINE_USERNAME=__token__ TWINE_PASSWORD=$$(az keyvault secret show --vault-name kv-use-shared-dev --name pypi-api-token --query value --output tsv) twine upload dist/*
 
 pre-commit:
 	$(ACTIVATE) $(VENV_BIN)/pre-commit install || echo "Warning: pre-commit hooks could not be installed. You may need to run 'git config --unset-all core.hooksPath' first"

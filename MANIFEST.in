@@ -1,6 +1,8 @@
 include LICENSE
 include README.md
 include CONTRIBUTING.md
+include VERSIONING.md
+include CHANGELOG.md
 include requirements.txt
 include requirements-dev.txt
 include pyproject.toml
