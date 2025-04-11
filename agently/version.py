@@ -5,7 +5,8 @@ __all__ = ["__version__", "__version_tuple__", "version", "version_tuple"]
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
-    from typing import Tuple, Union
+    from typing import Tuple
+    from typing import Union
 
     VERSION_TUPLE = Tuple[Union[int, str], ...]
 else:
@@ -16,5 +17,5 @@ __version__: str
 __version_tuple__: VERSION_TUPLE
 version_tuple: VERSION_TUPLE
 
-__version__ = version = '0.2.0.dev3+g89ea799.d20250411'
-__version_tuple__ = version_tuple = (0, 2, 0, 'dev3', 'g89ea799.d20250411')
+__version__ = version = '0.2.0.dev4+g0c70ae8'
+__version_tuple__ = version_tuple = (0, 2, 0, 'dev4', 'g0c70ae8')
