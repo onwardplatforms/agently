@@ -1,3 +1,1 @@
-"""
-Configuration module for Agently.
-""" 
+"""Configuration module for Agently."""
