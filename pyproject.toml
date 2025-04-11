@@ -26,6 +26,7 @@ exclude = '''
     | dist
     | venv
   )/
+  | agently/version\.py
 )
 '''
 
