@@ -6,7 +6,20 @@ include CHANGELOG.md
 include requirements.txt
 include requirements-dev.txt
 include pyproject.toml
+include agently/config/*.json
+recursive-include agently/config *.json
 global-exclude __pycache__
 global-exclude *.py[cod]
 global-exclude *.so
-global-exclude .DS_Store 
+global-exclude .DS_Store
+global-exclude .env
+global-exclude .venv
+global-exclude venv
+global-exclude .git
+global-exclude .gitignore
+global-exclude .pytest_cache
+global-exclude .coverage
+global-exclude htmlcov
+global-exclude dist
+global-exclude build
+global-exclude *.egg-info 
