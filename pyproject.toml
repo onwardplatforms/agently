@@ -1,6 +1,13 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "agently-cli"
+dynamic = ["version"]
+description = "Declarative AI Agent Framework"
+readme = "README.md"
+requires-python = ">=3.8"
 
 [tool.black]
 line-length = 125
@@ -19,6 +26,7 @@ exclude = '''
     | dist
     | venv
   )/
+  | agently/version\.py
 )
 '''
 
@@ -58,3 +66,13 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 python_files = "test_*.py"
 python_functions = "test_*"
+
+[tool.setuptools]
+packages = ["agently"]
+package-dir = {"" = "."}
+
+[tool.setuptools.package-data]
+agently = ["config/*.json"]
+
+[tool.setuptools_scm]
+write_to = "agently/version.py"
