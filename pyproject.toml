@@ -9,6 +9,9 @@ description = "Declarative AI Agent Framework"
 readme = "README.md"
 requires-python = ">=3.8"
 
+[project.scripts]
+agently = "agently.cli.commands:cli"
+
 [tool.black]
 line-length = 125
 target-version = ["py38", "py39", "py310", "py311"]
