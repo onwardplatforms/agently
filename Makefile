@@ -50,7 +50,7 @@ install: venv
 	$(ACTIVATE) $(PIP) install -e .
 
 install-dev: install
-	$(ACTIVATE) $(PIP) install pytest pytest-asyncio pytest-cov pytest-mock black flake8 flake8-docstrings isort mypy pre-commit autoflake build twine
+	$(ACTIVATE) $(PIP) install -r requirements-dev.txt
 	@echo "Pre-commit hooks installation is now optional, run 'make pre-commit' to install them"
 
 clean:
