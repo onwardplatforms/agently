@@ -67,10 +67,21 @@ def build_executable():
     version = get_package_version()
     print(f"Building executable for version: {version}")
     
-    # Ensure version file exists and has correct version
+    # Ensure version files exist and have correct version
     version_file = os.path.join(agently_dst, "_version.py")
     with open(version_file, "w") as f:
         f.write(f'__version__ = "{version}"\n')
+        f.write(f'version = "{version}"\n')
+    
+    # Also update the version.py file which is used by the CLI
+    version_file = os.path.join(agently_dst, "version.py")
+    with open(version_file, "w") as f:
+        f.write(f'"""Version information."""\n\n')
+        f.write(f'__all__ = ["__version__", "__version_tuple__", "version", "version_tuple"]\n\n')
+        f.write(f'__version__ = "{version}"\n')
+        f.write(f'version = "{version}"\n')
+        f.write(f'version_tuple = tuple(version.split("."))\n')
+        f.write(f'__version_tuple__ = version_tuple\n')
     
     # Create a standalone entry point script
     entry_script = os.path.join(build_dir, "entry_point.py")
