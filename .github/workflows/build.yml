@@ -34,17 +34,6 @@ jobs:
         python-version: '3.11'
         cache: 'pip'
     
-    - name: Set version
-      run: |
-        if [ "${{ github.event_name }}" == "release" ]; then
-          # Use release tag version
-          echo "SETUPTOOLS_SCM_PRETEND_VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
-        else
-          # For PRs and branch pushes, use a default dev version
-          echo "SETUPTOOLS_SCM_PRETEND_VERSION=0.2.0.dev0" >> $GITHUB_ENV
-        fi
-      shell: bash
-    
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -79,6 +68,11 @@ jobs:
       with:
         python-version: '3.11'
     
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install twine
+    
     - name: Download all artifacts
       uses: actions/download-artifact@v4
       with:
@@ -89,10 +83,15 @@ jobs:
         TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
         TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
       run: |
-        # Combine all platform-specific builds into a single directory
+        # Create combined directory
         mkdir -p dist/combined
-        find dist -type f -name "*.whl" -exec cp {} dist/combined/ \;
-        find dist -type f -name "*.tar.gz" -exec cp {} dist/combined/ \;
+        
+        # Copy first occurrence of each wheel and tarball to avoid duplicates
+        find dist -type f -name "*.whl" -not -path "*/combined/*" | head -1 | xargs -I{} cp {} dist/combined/
+        find dist -type f -name "*.tar.gz" -not -path "*/combined/*" | head -1 | xargs -I{} cp {} dist/combined/
+        
+        # Verify the files are there
+        ls -la dist/combined/
         
         # Publish to PyPI
         twine check dist/combined/*
