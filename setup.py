@@ -2,19 +2,13 @@ from setuptools import find_packages, setup
 import os
 import re
 
-# Read version from version.py without importing the package
-def read_version():
-    version_file = os.path.join(os.path.dirname(__file__), "agently", "version.py")
-    with open(version_file, "r") as f:
-        version_line = f.read()
-    version_match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]", version_line, re.M)
-    if version_match:
-        return version_match.group(1)
-    raise RuntimeError("Unable to find version string.")
+# Use setuptools_scm to get version from git tags
+# setup.py will be compatible with both direct usage and when installed via pip
 
 setup(
     name="agently-cli",
-    version=read_version(),
+    # Removed version here as it will be provided by setuptools_scm
+    use_scm_version=True,
     description="Declarative AI Agent Framework",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",

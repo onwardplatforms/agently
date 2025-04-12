@@ -48,6 +48,15 @@ python -m pip install -r requirements.txt
 python -m pip install -e .
 ```
 
+### Standalone Executables
+
+Don't want to install Python? You can download pre-built executables:
+
+1. Go to [GitHub Releases](https://github.com/onwardplatforms/agently/releases)
+2. Download the executable for your platform (macOS, Linux, or Windows)
+3. Make it executable (Linux/macOS only): `chmod +x agently`
+4. Run it directly: `./agently` (Linux/macOS) or `agently.exe` (Windows)
+
 ### Environment Setup
 
 Copy the example environment file and update with your API keys:
@@ -404,10 +413,16 @@ python -m flake8 agently
 ### Mac
 - If you encounter permission issues: `sudo pip install agently`
 - For M1/M2/M3 Macs, you may need to install Rosetta 2: `softwareupdate --install-rosetta`
+- For standalone executable: If you get "app is damaged" warnings, run: `xattr -d com.apple.quarantine ./agently`
 
 ### Windows
 - If you see "Command not found" errors, ensure Python is in your PATH or use `python -m` prefix (e.g., `python -m pip`)
 - If you get DLL load errors, try installing the [Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist)
+- For standalone executable: Right-click and select "Run as Administrator" if getting permission errors
+
+### Linux
+- For standalone executable: Make sure the file is executable: `chmod +x agently`
+- If you get "command not found" with the executable, try: `./agently` instead of just `agently`
 
 ## License
 
