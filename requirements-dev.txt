@@ -14,4 +14,6 @@ types-requests
 autoflake
 types-jsonschema
 types-PyYAML
+pyinstaller
+setuptools_scm
 -e .

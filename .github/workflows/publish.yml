@@ -1,8 +1,12 @@
-name: Publish Python Package
+name: Manual Publish Python Package
 
 on:
-  release:
-    types: [created]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 0.2.0)'
+        required: true
+        type: string
 
 jobs:
   deploy:
@@ -22,6 +26,7 @@ jobs:
         TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
         TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
       run: |
+        echo "Manual publication of version ${{ github.event.inputs.version }}"
         python -m build
         twine check dist/*
         twine upload dist/* 

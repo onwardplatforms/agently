@@ -1,16 +1,6 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2"]
+requires = ["setuptools>=42", "wheel", "setuptools_scm[toml]>=6.0"]
 build-backend = "setuptools.build_meta"
-
-[project]
-name = "agently-cli"
-dynamic = ["version"]
-description = "Declarative AI Agent Framework"
-readme = "README.md"
-requires-python = ">=3.8"
-
-[project.scripts]
-agently = "agently.cli.commands:cli"
 
 [tool.black]
 line-length = 125
@@ -29,7 +19,6 @@ exclude = '''
     | dist
     | venv
   )/
-  | agently/version\.py
 )
 '''
 
@@ -70,12 +59,8 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_functions = "test_*"
 
-[tool.setuptools]
-packages = ["agently"]
-package-dir = {"" = "."}
-
-[tool.setuptools.package-data]
-agently = ["config/*.json"]
-
 [tool.setuptools_scm]
-write_to = "agently/version.py"
+write_to = "agently/_version.py"
+# You can customize version scheme if needed
+# version_scheme = "post-release"
+# local_scheme = "node-and-date"
