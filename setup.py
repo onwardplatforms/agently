@@ -3,11 +3,27 @@ import os
 import re
 import subprocess
 
-# Simply use setuptools_scm for all versioning
-# After tagging v0.2.1, development versions will be 0.2.1.dev0+g{hash}, etc.
+# Version configuration
+version_args = {}
+
+# For GitHub releases, use a clean version without local parts
+if os.environ.get("GITHUB_ACTIONS") == "true" and os.environ.get("GITHUB_REF", "").startswith("refs/tags/"):
+    # Get version from the tag (v0.2.1 -> 0.2.1)
+    version = os.environ.get("GITHUB_REF_NAME", "").lstrip("v")
+    print(f"Building release version: {version}")
+    version_args["version"] = version
+else:
+    # For development builds, use setuptools_scm
+    print("Using setuptools_scm for development versioning")
+    version_args["use_scm_version"] = {
+        # Don't include local version identifier (after +) in PyPI uploads
+        "local_scheme": "no-local-version"
+    }
+
+# Setup with appropriate version configuration
 setup(
     name="agently-cli",
-    use_scm_version=True,
+    **version_args,
     description="Declarative AI Agent Framework",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",

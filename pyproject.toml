@@ -65,3 +65,4 @@ python_functions = "test_*"
 
 [tool.setuptools_scm]
 write_to = "agently/_version.py"
+local_scheme = "no-local-version"
