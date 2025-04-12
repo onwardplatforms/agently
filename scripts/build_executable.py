@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import importlib.metadata
 
 def get_platform():
     """Get the current platform name."""
@@ -21,6 +22,21 @@ def get_executable_extension():
     if platform.system().lower() == "windows":
         return ".exe"
     return ""
+
+def get_package_version():
+    """Get the current package version."""
+    try:
+        # This will get the version from the installed package
+        return importlib.metadata.version("agently-cli")
+    except importlib.metadata.PackageNotFoundError:
+        # If running in a development environment
+        try:
+            from setuptools_scm import get_version
+            return get_version(root='..', relative_to=__file__)
+        except:
+            # Fallback to a default version if all else fails
+            print("Warning: Could not determine package version, using fallback")
+            return "0.2.1"
 
 def build_executable():
     """Build standalone executable for the current platform."""
@@ -46,6 +62,15 @@ def build_executable():
     
     # Copy the entire package
     shutil.copytree(agently_src, agently_dst)
+    
+    # Get current version
+    version = get_package_version()
+    print(f"Building executable for version: {version}")
+    
+    # Ensure version file exists and has correct version
+    version_file = os.path.join(agently_dst, "_version.py")
+    with open(version_file, "w") as f:
+        f.write(f'__version__ = "{version}"\n')
     
     # Create a standalone entry point script
     entry_script = os.path.join(build_dir, "entry_point.py")
