@@ -3,11 +3,10 @@ name: Cross-Platform Build
 on:
   push:
     branches: [ main, develop ]
-    tags:
-      - 'v*'
   pull_request:
     branches: [ main, develop ]
-  workflow_dispatch:
+  release:
+    types: [created]
 
 jobs:
   build:
@@ -53,11 +52,11 @@ jobs:
         path: dist/${{ matrix.platform }}/*
         retention-days: 5
 
-  # Only run this job on tags (releases)
+  # Only run this job on GitHub Releases
   publish:
     name: Publish to PyPI
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'release' && github.event.action == 'created'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
