@@ -3,11 +3,15 @@ import os
 import re
 
 # Use setuptools_scm to get version from git tags
-# setup.py will be compatible with both direct usage and when installed via pip
+# SETUPTOOLS_SCM_PRETEND_VERSION environment variable will override in GitHub Actions
 
 setup(
     name="agently-cli",
-    use_scm_version=True,
+    use_scm_version={
+        "version_scheme": "no-guess-dev",
+        "local_scheme": "no-local-version",
+        "fallback_version": "0.2.0",
+    },
     description="Declarative AI Agent Framework",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
