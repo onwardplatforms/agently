@@ -2,6 +2,10 @@
 requires = ["setuptools>=42", "wheel", "setuptools_scm[toml]>=6.0"]
 build-backend = "setuptools.build_meta"
 
+# Remove the problematic project section since we're using setup.py
+# [project]
+# dynamic = ["version"]
+
 [tool.black]
 line-length = 125
 target-version = ["py38", "py39", "py310", "py311"]
@@ -63,3 +67,4 @@ python_functions = "test_*"
 write_to = "agently/_version.py"
 version_scheme = "no-guess-dev"
 local_scheme = "no-local-version"
+fallback_version = "0.2.0.dev0"

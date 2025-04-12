@@ -52,9 +52,12 @@ jobs:
       id: get_version
       run: |
         if [ "${{ github.event_name }}" == "release" ]; then
-          echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "SETUPTOOLS_SCM_PRETEND_VERSION=$VERSION" >> $GITHUB_ENV
         else
-          echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+          echo "SETUPTOOLS_SCM_PRETEND_VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
         fi
       shell: bash
     
