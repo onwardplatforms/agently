@@ -65,4 +65,3 @@ python_functions = "test_*"
 
 [tool.setuptools_scm]
 write_to = "agently/_version.py"
-fallback_version = "0.2.0.dev0"
