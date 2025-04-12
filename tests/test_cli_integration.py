@@ -443,4 +443,309 @@ def test_log_level_option():
     
     # Check for log level option
     assert "--log-level" in result.output
-    assert "Set the logging level" in result.output 
+    assert "Set the logging level" in result.output
+
+
+@pytest.fixture
+def temp_multi_agent_dir():
+    """Create a temporary project directory with multiple agents for testing."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Create a temporary directory
+        project_dir = Path(temp_dir)
+        
+        # Create agent YAML file with multiple agents
+        agent_yaml = project_dir / "agently.yaml"
+        with open(agent_yaml, "w") as f:
+            f.write("""
+version: "1"
+agents:
+  - id: "agent1"
+    name: "Agent One"
+    description: "First test agent"
+    system_prompt: "You are test agent one."
+    model:
+      provider: "openai"
+      model: "gpt-4o"
+      temperature: 0.7
+    plugins:
+      local:
+        - source: "./plugins/test1"
+          variables:
+            agent_name: "Agent One"
+  
+  - id: "agent2"
+    name: "Agent Two"
+    description: "Second test agent"
+    system_prompt: "You are test agent two."
+    model:
+      provider: "openai"
+      model: "gpt-4o"
+      temperature: 0.5
+    plugins:
+      local:
+        - source: "./plugins/test2"
+          variables:
+            agent_name: "Agent Two"
+""")
+        
+        # Create a copy with .yml extension to test auto-detection
+        agent_yml = project_dir / "custom.yml"
+        with open(agent_yml, "w") as f:
+            f.write("""
+version: "1"
+agents:
+  - id: "custom1"
+    name: "Custom Agent"
+    description: "Custom config agent"
+    system_prompt: "You are a custom agent."
+    model:
+      provider: "openai"
+      model: "gpt-4o"
+      temperature: 0.7
+    plugins:
+      local:
+        - source: "./plugins/test1"
+          variables:
+            agent_name: "Custom Agent"
+""")
+        
+        # Create plugins directories and files
+        for agent_id in ["test1", "test2"]:
+            plugins_dir = project_dir / "plugins" / agent_id
+            plugins_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Create plugin file
+            plugin_file = plugins_dir / "__init__.py"
+            with open(plugin_file, "w") as f:
+                f.write(f"""
+from agently.plugins.base import Plugin
+
+class Test{agent_id.capitalize()}Plugin(Plugin):
+    name = "{agent_id}"
+    description = "A test plugin for {agent_id}"
+    plugin_instructions = "This is a test plugin for {agent_id}."
+    
+    def get_kernel_functions(self):
+        return {{"test_function": lambda x: f"Test function for {agent_id} called with {{x}}"}}
+""")
+        
+        # Create lockfile with multi-agent structure
+        lockfile = project_dir / "agently.lockfile.json"
+        with open(lockfile, "w") as f:
+            json.dump({
+                "agents": {
+                    "agent1": {
+                        "name": "Agent One",
+                        "plugins": {
+                            "sk": {
+                                "local/test1": {
+                                    "namespace": "local",
+                                    "name": "test1",
+                                    "full_name": "test1",
+                                    "version": "local",
+                                    "source_type": "local",
+                                    "plugin_type": "sk",
+                                    "source_path": str(project_dir / "plugins" / "test1"),
+                                    "sha": "test-sha-1",
+                                    "installed_at": "2023-01-01T00:00:00",
+                                    "variables": {
+                                        "agent_name": "Agent One"
+                                    }
+                                }
+                            },
+                            "mcp": {}
+                        }
+                    },
+                    "agent2": {
+                        "name": "Agent Two",
+                        "plugins": {
+                            "sk": {
+                                "local/test2": {
+                                    "namespace": "local",
+                                    "name": "test2",
+                                    "full_name": "test2",
+                                    "version": "local",
+                                    "source_type": "local",
+                                    "plugin_type": "sk",
+                                    "source_path": str(project_dir / "plugins" / "test2"),
+                                    "sha": "test-sha-2",
+                                    "installed_at": "2023-01-01T00:00:00",
+                                    "variables": {
+                                        "agent_name": "Agent Two"
+                                    }
+                                }
+                            },
+                            "mcp": {}
+                        }
+                    }
+                },
+                "plugins": {
+                    "sk": {
+                        "local/test1": {
+                            "namespace": "local",
+                            "name": "test1",
+                            "full_name": "test1",
+                            "version": "local",
+                            "source_type": "local",
+                            "plugin_type": "sk",
+                            "source_path": str(project_dir / "plugins" / "test1"),
+                            "sha": "test-sha-1",
+                            "installed_at": "2023-01-01T00:00:00"
+                        },
+                        "local/test2": {
+                            "namespace": "local",
+                            "name": "test2",
+                            "full_name": "test2",
+                            "version": "local",
+                            "source_type": "local",
+                            "plugin_type": "sk",
+                            "source_path": str(project_dir / "plugins" / "test2"),
+                            "sha": "test-sha-2",
+                            "installed_at": "2023-01-01T00:00:00"
+                        }
+                    },
+                    "mcp": {}
+                }
+            }, f)
+        
+        # Change to the temporary directory
+        original_dir = os.getcwd()
+        os.chdir(project_dir)
+        
+        yield project_dir
+        
+        # Change back to the original directory
+        os.chdir(original_dir)
+
+
+def test_list_specific_agent(temp_multi_agent_dir):
+    """Test the list agents command with a specific agent ID."""
+    # Run the list agents command with a specific agent ID
+    runner = CliRunner()
+    result = runner.invoke(cli, ["list", "agents", "agent1"])
+    
+    # Check that the command executed successfully
+    assert result.exit_code == 0
+    
+    # Verify the output contains detailed agent information
+    assert "Agent: Agent One (agent1)" in result.output
+    assert "Description: First test agent" in result.output
+    assert "Model: openai gpt-4o" in result.output
+    
+    # Check for plugin info
+    assert "Plugins:" in result.output
+    assert "./plugins/test1" in result.output
+
+
+def test_init_specific_agent(temp_multi_agent_dir):
+    """Test the init command with a specific agent ID."""
+    # Run the init command with a specific agent ID
+    runner = CliRunner()
+    result = runner.invoke(cli, ["init", "agent2"])
+    
+    # Check that the command executed successfully
+    assert result.exit_code == 0
+    
+    # Verify the output mentions the specific agent
+    assert "Agent Two" in result.output or "agent2" in result.output
+    
+    # Check that the initialization was successful
+    assert "Agently has been successfully initialized" in result.output
+
+
+def test_run_specific_agent(temp_multi_agent_dir):
+    """Test the run command with a specific agent ID."""
+    # Set up environment with a mock API key
+    env = os.environ.copy()
+    env["OPENAI_API_KEY"] = "test-key-123"
+    
+    # Mock the interactive_loop function to avoid actual execution
+    with patch("agently.cli.commands.interactive_loop") as mock_loop:
+        # Run the run command with a specific agent ID
+        runner = CliRunner(env=env)
+        result = runner.invoke(cli, ["run", "agent2", "--force"])
+        
+        # Check that the command executed successfully
+        assert result.exit_code == 0
+        
+        # Verify that interactive_loop was called
+        mock_loop.assert_called_once()
+        
+        # Verify the correct agent config was loaded
+        agent_config = mock_loop.call_args[0][0]
+        assert agent_config.name == "Agent Two"
+        assert agent_config.id == "agent2"
+
+
+def test_custom_config_file_path(temp_multi_agent_dir):
+    """Test using a custom config file path with --file option."""
+    # Set up environment with a mock API key
+    env = os.environ.copy()
+    env["OPENAI_API_KEY"] = "test-key-123"
+    
+    # Test list command with custom config file
+    runner = CliRunner(env=env)
+    result = runner.invoke(cli, ["list", "agents", "--file", "custom.yml"])
+    
+    # Check that the command executed successfully
+    assert result.exit_code == 0
+    
+    # Verify the output contains the agent from the custom config
+    assert "Custom Agent" in result.output
+    
+    # Test init command with custom config file
+    with patch("agently.cli.commands._initialize_plugins") as mock_init:
+        mock_init.return_value = {"added": 0, "updated": 0, "unchanged": 1, "removed": 0, "failed": 0}
+        
+        result = runner.invoke(cli, ["init", "--file", "custom.yml"])
+        
+        # Check that the command executed successfully
+        assert result.exit_code == 0
+        
+        # Verify _initialize_plugins was called with the correct file
+        args, _ = mock_init.call_args
+        assert str(args[0]).endswith("custom.yml")
+    
+    # Test run command with custom config file
+    with patch("agently.cli.commands.interactive_loop") as mock_loop:
+        result = runner.invoke(cli, ["run", "--file", "custom.yml", "--force"])
+        
+        # Check that the command executed successfully
+        assert result.exit_code == 0
+        
+        # Verify that interactive_loop was called
+        mock_loop.assert_called_once()
+        
+        # Verify the correct agent config was loaded
+        agent_config = mock_loop.call_args[0][0]
+        assert agent_config.name == "Custom Agent"
+        assert agent_config.id == "custom1"
+
+
+def test_file_auto_detection(temp_multi_agent_dir):
+    """Test automatic detection of config files with different extensions."""
+    # Rename the default config file to test auto-detection
+    os.rename("agently.yaml", "agently.yaml.bak")
+    
+    # Create a .yml file that should be auto-detected
+    with open("agently.yml", "w") as f:
+        f.write("""
+version: "1"
+name: "Auto Detected Agent"
+description: "Agent from auto-detected .yml file"
+system_prompt: "You are an auto-detected agent."
+model:
+  provider: "openai"
+  model: "gpt-4o"
+  temperature: 0.7
+""")
+    
+    # Test list agents command without specifying file path
+    runner = CliRunner()
+    result = runner.invoke(cli, ["list", "agents"])
+    
+    # Check that the command executed successfully
+    assert result.exit_code == 0
+    
+    # Verify it found the .yml file
+    assert "Auto Detected Agent" in result.output 
