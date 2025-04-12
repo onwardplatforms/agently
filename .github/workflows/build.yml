@@ -79,6 +79,11 @@ jobs:
       with:
         python-version: '3.11'
     
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install twine
+    
     - name: Download all artifacts
       uses: actions/download-artifact@v4
       with:
@@ -89,10 +94,16 @@ jobs:
         TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
         TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
       run: |
-        # Combine all platform-specific builds into a single directory
+        # Create combined directory
         mkdir -p dist/combined
-        find dist -type f -name "*.whl" -exec cp {} dist/combined/ \;
-        find dist -type f -name "*.tar.gz" -exec cp {} dist/combined/ \;
+        
+        # Copy first occurrence of each wheel and tarball
+        # Use find with -not -path to avoid duplicates
+        find dist -type f -name "*.whl" -not -path "*/combined/*" | head -1 | xargs -I{} cp {} dist/combined/
+        find dist -type f -name "*.tar.gz" -not -path "*/combined/*" | head -1 | xargs -I{} cp {} dist/combined/
+        
+        # Verify the files are there
+        ls -la dist/combined/
         
         # Publish to PyPI
         twine check dist/combined/*
