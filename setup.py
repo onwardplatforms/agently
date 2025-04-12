@@ -6,36 +6,16 @@ import subprocess
 # Version configuration
 version_args = {}
 
-# If in CI/CD (GitHub Actions), use a fixed version
-if os.environ.get("GITHUB_ACTIONS") == "true":
-    # If this is a release with a tag, use the tag version
-    if os.environ.get("GITHUB_REF", "").startswith("refs/tags/v"):
-        tag = os.environ.get("GITHUB_REF", "").split("/")[-1]
-        if tag.startswith("v"):
-            version = tag[1:]  # Remove 'v' prefix
-        print(f"CI/CD release build using tag version: {version}")
-    else:
-        # For non-release builds, use base version + git SHA
-        try:
-            git_sha = os.environ.get("GITHUB_SHA", "")
-            if git_sha:
-                short_sha = git_sha[:7]
-                version = f"0.2.0.dev0+g{short_sha}"
-            else:
-                # Fallback if SHA isn't available
-                version = "0.2.0.dev0"
-            print(f"CI/CD build using version with git SHA: {version}")
-        except Exception as e:
-            print(f"Error getting git SHA: {e}, using fallback version")
-            version = "0.2.0.dev0"
-    
+# If in CI/CD (GitHub Actions) and this is a release (tag)
+if os.environ.get("GITHUB_ACTIONS") == "true" and os.environ.get("GITHUB_REF", "").startswith("refs/tags/"):
+    # Extract version from the tag (v0.2.0 -> 0.2.0)
+    version = os.environ.get("GITHUB_REF_NAME", "").lstrip("v")
+    print(f"Building release version: {version}")
     version_args["version"] = version
 else:
-    # For local development, use setuptools_scm
-    print("Local development using setuptools_scm")
-    version_args["use_scm_version"] = {
-        "fallback_version": "0.2.0.dev0"
-    }
+    # For local development and non-release CI builds, use setuptools_scm
+    print("Using setuptools_scm for development versioning")
+    version_args["use_scm_version"] = True
 
 setup(
     name="agently-cli",
