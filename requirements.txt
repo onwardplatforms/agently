@@ -11,3 +11,4 @@ azure-identity
 ollama
 mcp
 typing-extensions
+prompt_toolkit

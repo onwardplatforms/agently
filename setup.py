@@ -7,7 +7,6 @@ import re
 
 setup(
     name="agently-cli",
-    # Removed version here as it will be provided by setuptools_scm
     use_scm_version=True,
     description="Declarative AI Agent Framework",
     long_description=open("README.md").read(),
@@ -16,7 +15,10 @@ setup(
     author_email="info@onwardplatforms.com",
     url="https://github.com/onwardplatforms/agently",
     license="MIT",
-    packages=find_packages(),
+    packages=find_packages(include=['agently', 'agently.*']),
+    package_data={
+        'agently': ['config/*.json'],
+    },
     install_requires=[
         "click",
         "semantic-kernel",
@@ -31,6 +33,7 @@ setup(
         "azure-identity",
         "ollama",
         "mcp",
+        "prompt_toolkit",
     ],
     extras_require={
         "test": [
