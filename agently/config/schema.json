@@ -1,12 +1,9 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
-    "title": "Agently Agent Configuration",
+    "title": "Agently Configuration",
     "type": "object",
     "required": [
-        "version",
-        "name",
-        "system_prompt",
-        "model"
+        "version"
     ],
     "properties": {
         "version": {
@@ -16,9 +13,209 @@
             ],
             "description": "Configuration format version"
         },
+        "agents": {
+            "type": "array",
+            "description": "Multiple agents that can interact with each other",
+            "items": {
+                "type": "object",
+                "required": [
+                    "name",
+                    "system_prompt",
+                    "model"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "Unique identifier for the agent"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the agent"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Description of the agent's purpose and capabilities"
+                    },
+                    "system_prompt": {
+                        "type": "string",
+                        "description": "System prompt that defines the agent's behavior"
+                    },
+                    "model": {
+                        "type": "object",
+                        "required": [
+                            "provider",
+                            "model"
+                        ],
+                        "properties": {
+                            "provider": {
+                                "type": "string",
+                                "description": "Model provider (e.g., openai, anthropic)"
+                            },
+                            "model": {
+                                "type": "string",
+                                "description": "Model name/version"
+                            },
+                            "temperature": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1,
+                                "default": 0.7,
+                                "description": "Temperature for response generation"
+                            },
+                            "max_tokens": {
+                                "type": [
+                                    "integer",
+                                    "null"
+                                ],
+                                "description": "Maximum tokens in response (null for no limit)"
+                            },
+                            "top_p": {
+                                "type": [
+                                    "number",
+                                    "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 1,
+                                "description": "Top-p sampling parameter"
+                            },
+                            "frequency_penalty": {
+                                "type": [
+                                    "number",
+                                    "null"
+                                ],
+                                "description": "Penalty for token frequency"
+                            },
+                            "presence_penalty": {
+                                "type": [
+                                    "number",
+                                    "null"
+                                ],
+                                "description": "Penalty for token presence"
+                            }
+                        }
+                    },
+                    "plugins": {
+                        "type": "object",
+                        "properties": {
+                            "local": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "required": [
+                                        "source"
+                                    ],
+                                    "properties": {
+                                        "source": {
+                                            "type": "string",
+                                            "description": "Path to plugin (for local plugins)"
+                                        },
+                                        "type": {
+                                            "type": "string",
+                                            "enum": [
+                                                "sk",
+                                                "mcp"
+                                            ],
+                                            "default": "sk",
+                                            "description": "Plugin type (sk = semantic kernel, mcp = managed code plugin)"
+                                        },
+                                        "name": {
+                                            "type": "string",
+                                            "description": "Optional name override for the plugin"
+                                        },
+                                        "command": {
+                                            "type": "string",
+                                            "description": "Command to run (for MCP plugins)"
+                                        },
+                                        "args": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "description": "Arguments for the command (for MCP plugins)"
+                                        },
+                                        "variables": {
+                                            "type": "object",
+                                            "description": "Variables to pass to the plugin"
+                                        }
+                                    }
+                                }
+                            },
+                            "github": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "required": [
+                                        "source",
+                                        "version"
+                                    ],
+                                    "properties": {
+                                        "source": {
+                                            "type": "string",
+                                            "description": "GitHub repository source (can be 'user/name', 'github.com/user/name', or 'https://github.com/user/name')"
+                                        },
+                                        "version": {
+                                            "type": "string",
+                                            "description": "Version tag (for github plugins)"
+                                        },
+                                        "type": {
+                                            "type": "string",
+                                            "enum": [
+                                                "sk",
+                                                "mcp"
+                                            ],
+                                            "default": "sk",
+                                            "description": "Plugin type (sk = semantic kernel, mcp = managed code plugin)"
+                                        },
+                                        "name": {
+                                            "type": "string",
+                                            "description": "Optional name override for the plugin"
+                                        },
+                                        "plugin_path": {
+                                            "type": "string",
+                                            "description": "Path within the repository (for github plugins)",
+                                            "default": ""
+                                        },
+                                        "command": {
+                                            "type": "string",
+                                            "description": "Command to run (for MCP plugins)"
+                                        },
+                                        "args": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "description": "Arguments for the command (for MCP plugins)"
+                                        },
+                                        "variables": {
+                                            "type": "object",
+                                            "description": "Variables to pass to the plugin"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "features": {
+                        "type": "object",
+                        "description": "Agent features configuration"
+                    },
+                    "env": {
+                        "type": "object",
+                        "description": "Environment variables for this agent",
+                        "additionalProperties": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "name": {
             "type": "string",
-            "description": "Name of the agent"
+            "description": "Name of the agent (single agent configuration)"
+        },
+        "id": {
+            "type": "string",
+            "description": "Unique identifier for the agent (single agent configuration)"
         },
         "description": {
             "type": "string",
@@ -97,6 +294,30 @@
                                 "type": "string",
                                 "description": "Path to plugin (for local plugins)"
                             },
+                            "type": {
+                                "type": "string",
+                                "enum": [
+                                    "sk",
+                                    "mcp"
+                                ],
+                                "default": "sk",
+                                "description": "Plugin type (sk = semantic kernel, mcp = managed code plugin)"
+                            },
+                            "name": {
+                                "type": "string",
+                                "description": "Optional name override for the plugin"
+                            },
+                            "command": {
+                                "type": "string",
+                                "description": "Command to run (for MCP plugins)"
+                            },
+                            "args": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "description": "Arguments for the command (for MCP plugins)"
+                            },
                             "variables": {
                                 "type": "object",
                                 "description": "Variables to pass to the plugin"
@@ -121,110 +342,38 @@
                                 "type": "string",
                                 "description": "Version tag (for github plugins)"
                             },
+                            "type": {
+                                "type": "string",
+                                "enum": [
+                                    "sk",
+                                    "mcp"
+                                ],
+                                "default": "sk",
+                                "description": "Plugin type (sk = semantic kernel, mcp = managed code plugin)"
+                            },
+                            "name": {
+                                "type": "string",
+                                "description": "Optional name override for the plugin"
+                            },
                             "plugin_path": {
                                 "type": "string",
                                 "description": "Path within the repository (for github plugins)",
                                 "default": ""
                             },
+                            "command": {
+                                "type": "string",
+                                "description": "Command to run (for MCP plugins)"
+                            },
+                            "args": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "description": "Arguments for the command (for MCP plugins)"
+                            },
                             "variables": {
                                 "type": "object",
                                 "description": "Variables to pass to the plugin"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "mcp_servers": {
-            "type": "object",
-            "description": "MCP server configurations for semantic kernel integration",
-            "properties": {
-                "local": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "required": [
-                            "name",
-                            "command",
-                            "args"
-                        ],
-                        "properties": {
-                            "name": {
-                                "type": "string",
-                                "description": "Name of the MCP server"
-                            },
-                            "description": {
-                                "type": "string",
-                                "description": "Description of the MCP server's purpose and capabilities"
-                            },
-                            "command": {
-                                "type": "string",
-                                "description": "Command to run the MCP server (e.g., npx, uvx, docker)"
-                            },
-                            "args": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string"
-                                },
-                                "description": "Arguments for the MCP server command"
-                            },
-                            "source": {
-                                "type": "string",
-                                "description": "Path to local MCP server files (if applicable)"
-                            },
-                            "variables": {
-                                "type": "object",
-                                "description": "Variables to pass to the MCP server"
-                            }
-                        }
-                    }
-                },
-                "github": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "required": [
-                            "source",
-                            "version",
-                            "command",
-                            "args"
-                        ],
-                        "properties": {
-                            "source": {
-                                "type": "string",
-                                "description": "GitHub repository source (can be 'user/name', 'github.com/user/name', or 'https://github.com/user/name')"
-                            },
-                            "version": {
-                                "type": "string",
-                                "description": "Version tag for the MCP server"
-                            },
-                            "name": {
-                                "type": "string",
-                                "description": "Name of the MCP server (defaults to repository name)"
-                            },
-                            "description": {
-                                "type": "string",
-                                "description": "Description of the MCP server's purpose and capabilities"
-                            },
-                            "command": {
-                                "type": "string",
-                                "description": "Command to run the MCP server (e.g., npx, uvx, docker)"
-                            },
-                            "args": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string"
-                                },
-                                "description": "Arguments for the MCP server command"
-                            },
-                            "server_path": {
-                                "type": "string",
-                                "description": "Path within the repository where the MCP server is located",
-                                "default": ""
-                            },
-                            "variables": {
-                                "type": "object",
-                                "description": "Variables to pass to the MCP server"
                             }
                         }
                     }

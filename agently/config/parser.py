@@ -5,7 +5,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any, Dict, List, Optional, Union
 from uuid import uuid4
 
 import jsonschema
@@ -22,11 +22,42 @@ logger = logging.getLogger(__name__)
 ENV_VAR_PATTERN = re.compile(r"\$\{\{\s*env\.([A-Za-z0-9_]+)\s*\}\}")
 
 
-def load_agent_config(file_path: Union[str, Path]) -> AgentConfig:
+def find_config_file(file_path: Optional[str] = None) -> Optional[Path]:
+    """Find the agent configuration file.
+    
+    Checks for:
+    1. Explicit file path if provided
+    2. agently.yaml in current directory
+    3. agently.yml in current directory
+    
+    Args:
+        file_path: Optional explicit path to configuration file
+        
+    Returns:
+        Path to configuration file if found, None otherwise
+    """
+    # Check explicit path first
+    if file_path and Path(file_path).exists():
+        logger.debug(f"Using specified config file: {file_path}")
+        return Path(file_path)
+    
+    # Check default paths
+    for ext in ["yaml", "yml"]:
+        default_path = Path.cwd() / f"agently.{ext}"
+        if default_path.exists():
+            logger.debug(f"Found config file: {default_path}")
+            return default_path
+    
+    logger.debug("No config file found")
+    return None
+
+
+def load_agent_config(file_path: Union[str, Path], agent_id: Optional[str] = None) -> AgentConfig:
     """Load agent configuration from YAML.
 
     Args:
         file_path: Path to the YAML configuration file
+        agent_id: Optional ID of specific agent to load from multi-agent config
 
     Returns:
         AgentConfig instance
@@ -34,6 +65,7 @@ def load_agent_config(file_path: Union[str, Path]) -> AgentConfig:
     Raises:
         FileNotFoundError: If the configuration file doesn't exist
         jsonschema.exceptions.ValidationError: If the configuration is invalid
+        ValueError: If agent_id is specified but not found in config
     """
     file_path = Path(file_path)
     logger.info(f"Loading agent configuration from {file_path}")
@@ -69,8 +101,80 @@ def load_agent_config(file_path: Union[str, Path]) -> AgentConfig:
     load_dotenv()  # Load .env file if exists
     config = resolve_environment_variables(config)
 
-    # 4. Convert to AgentConfig
-    return create_agent_config(config, file_path)
+    # 4. Check if we have a multi-agent or single-agent config
+    if "agents" in config and config["agents"]:
+        # Multi-agent configuration
+        if agent_id:
+            # Find the specific agent by ID
+            for agent_config in config["agents"]:
+                # Generate ID if not provided
+                if "id" not in agent_config:
+                    agent_config["id"] = f"agent-{uuid4().hex[:8]}"
+                
+                if agent_config["id"] == agent_id:
+                    return create_agent_config(agent_config, file_path)
+            
+            # Agent ID not found
+            logger.error(f"Agent with ID '{agent_id}' not found in configuration")
+            raise ValueError(f"Agent with ID '{agent_id}' not found in configuration")
+        else:
+            # Use the first agent if no ID specified
+            first_agent = config["agents"][0]
+            # Generate ID if not provided
+            if "id" not in first_agent:
+                first_agent["id"] = f"agent-{uuid4().hex[:8]}"
+            
+            return create_agent_config(first_agent, file_path)
+    else:
+        # Single-agent configuration
+        return create_agent_config(config, file_path)
+
+
+def get_all_agents(file_path: Union[str, Path]) -> List[Dict[str, Any]]:
+    """Get all agents from a configuration file.
+    
+    Args:
+        file_path: Path to the configuration file
+        
+    Returns:
+        List of agent configurations
+        
+    Raises:
+        FileNotFoundError: If the configuration file doesn't exist
+    """
+    file_path = Path(file_path)
+    logger.info(f"Loading all agents from {file_path}")
+    
+    if not file_path.exists():
+        logger.error(f"Configuration file not found: {file_path}")
+        raise FileNotFoundError(f"Configuration file not found: {file_path}")
+    
+    # Load YAML file
+    try:
+        with open(file_path, "r") as f:
+            config = yaml.safe_load(f)
+    except Exception as e:
+        logger.error(f"Error loading YAML: {e}")
+        raise ValueError(f"Error loading YAML configuration: {e}")
+    
+    # Check if we have a multi-agent or single-agent config
+    if "agents" in config and config["agents"]:
+        # Multi-agent configuration
+        agents = config["agents"]
+        
+        # Ensure each agent has an ID
+        for agent in agents:
+            if "id" not in agent:
+                agent["id"] = f"agent-{uuid4().hex[:8]}"
+        
+        return agents
+    else:
+        # Single-agent configuration
+        # Create a list with one agent
+        if "id" not in config:
+            config["id"] = f"agent-{uuid4().hex[:8]}"
+        
+        return [config]
 
 
 def resolve_environment_variables(config: Dict[str, Any]) -> Dict[str, Any]:

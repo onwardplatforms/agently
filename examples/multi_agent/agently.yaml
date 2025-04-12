@@ -1,0 +1,54 @@
+version: "1"
+agents:
+  - id: "researcher"
+    name: "Research Agent"
+    description: "Specializes in finding and analyzing information"
+    system_prompt: >
+      You are a research assistant with expertise in finding and analyzing information.
+      Focus on providing comprehensive, accurate information with proper citations.
+      When you don't know something, be transparent about the limits of your knowledge.
+    model:
+      provider: "openai"
+      model: "gpt-4o"
+      temperature: 0.2
+    plugins:
+      local:
+        - source: "../hello_local/plugins/hello"
+          variables:
+            default_name: "Researcher"
+
+  - id: "coder"
+    name: "Coding Agent"
+    description: "Specializes in writing and debugging code"
+    system_prompt: >
+      You are a coding assistant with expertise in software development.
+      Provide clean, well-commented code with explanations of your approach.
+      Focus on best practices, readability, and efficiency in your solutions.
+    model:
+      provider: "openai"
+      model: "gpt-4o"
+      temperature: 0.3
+    plugins:
+      local:
+        - source: "../coder_agent/plugins/coder"
+
+  - id: "creative"
+    name: "Creative Agent"
+    description: "Specializes in creative writing and idea generation"
+    system_prompt: >
+      You are a creative assistant with expertise in writing, storytelling, and idea generation.
+      Think outside the box and offer imaginative suggestions and content.
+      Help users develop creative concepts and provide unique perspectives.
+    model:
+      provider: "openai"
+      model: "gpt-4o"
+      temperature: 0.7
+    plugins:
+      local:
+        - source: "../hello_local/plugins/hello"
+          variables:
+            default_name: "Creative"
+
+# Environment variables are shared across all agents
+env:
+  OPENAI_API_KEY: ${{ env.OPENAI_API_KEY }} 
