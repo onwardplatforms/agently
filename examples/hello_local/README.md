@@ -125,9 +125,14 @@ These interactions confirm that the plugin is correctly using the `default_name`
 You can customize the `default_name` variable by changing it in the `agently.yaml` file:
 
 ```yaml
-plugins:
-  local:
-    - path: "./plugins/hello"
-      variables:
-        default_name: "Your Custom Default Name"
+version: "1"
+agents:
+  - name: "Hello Agent"
+    # other agent configuration...
+    plugins:
+      - source: "local"
+        type: "agently"
+        path: "./plugins/hello"
+        variables:
+          default_name: "Your Custom Default Name"
 ```

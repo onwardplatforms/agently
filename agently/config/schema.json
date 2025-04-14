@@ -1,245 +1,349 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
-    "title": "Agently Agent Configuration",
+    "title": "Agently Configuration",
     "type": "object",
     "required": [
         "version",
-        "name",
-        "system_prompt",
-        "model"
+        "agents"
     ],
+    "additionalProperties": false,
     "properties": {
         "version": {
             "type": "string",
-            "enum": [
-                "1"
-            ],
-            "description": "Configuration format version"
-        },
-        "name": {
-            "type": "string",
-            "description": "Name of the agent"
-        },
-        "description": {
-            "type": "string",
-            "description": "Description of the agent's purpose and capabilities"
-        },
-        "system_prompt": {
-            "type": "string",
-            "description": "System prompt that defines the agent's behavior"
-        },
-        "model": {
-            "type": "object",
-            "required": [
-                "provider",
-                "model"
-            ],
-            "properties": {
-                "provider": {
-                    "type": "string",
-                    "description": "Model provider (e.g., openai, anthropic)"
-                },
-                "model": {
-                    "type": "string",
-                    "description": "Model name/version"
-                },
-                "temperature": {
-                    "type": "number",
-                    "minimum": 0,
-                    "maximum": 1,
-                    "default": 0.7,
-                    "description": "Temperature for response generation"
-                },
-                "max_tokens": {
-                    "type": [
-                        "integer",
-                        "null"
-                    ],
-                    "description": "Maximum tokens in response (null for no limit)"
-                },
-                "top_p": {
-                    "type": [
-                        "number",
-                        "null"
-                    ],
-                    "minimum": 0,
-                    "maximum": 1,
-                    "description": "Top-p sampling parameter"
-                },
-                "frequency_penalty": {
-                    "type": [
-                        "number",
-                        "null"
-                    ],
-                    "description": "Penalty for token frequency"
-                },
-                "presence_penalty": {
-                    "type": [
-                        "number",
-                        "null"
-                    ],
-                    "description": "Penalty for token presence"
-                }
+            "description": "Configuration format version",
+            "validation": {
+                "pattern": "^\\d+$",
+                "options": [
+                    "1"
+                ]
             }
-        },
-        "plugins": {
-            "type": "object",
-            "properties": {
-                "local": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "required": [
-                            "source"
-                        ],
-                        "properties": {
-                            "source": {
-                                "type": "string",
-                                "description": "Path to plugin (for local plugins)"
-                            },
-                            "variables": {
-                                "type": "object",
-                                "description": "Variables to pass to the plugin"
-                            }
-                        }
-                    }
-                },
-                "github": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "required": [
-                            "source",
-                            "version"
-                        ],
-                        "properties": {
-                            "source": {
-                                "type": "string",
-                                "description": "GitHub repository source (can be 'user/name', 'github.com/user/name', or 'https://github.com/user/name')"
-                            },
-                            "version": {
-                                "type": "string",
-                                "description": "Version tag (for github plugins)"
-                            },
-                            "plugin_path": {
-                                "type": "string",
-                                "description": "Path within the repository (for github plugins)",
-                                "default": ""
-                            },
-                            "variables": {
-                                "type": "object",
-                                "description": "Variables to pass to the plugin"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "mcp_servers": {
-            "type": "object",
-            "description": "MCP server configurations for semantic kernel integration",
-            "properties": {
-                "local": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "required": [
-                            "name",
-                            "command",
-                            "args"
-                        ],
-                        "properties": {
-                            "name": {
-                                "type": "string",
-                                "description": "Name of the MCP server"
-                            },
-                            "description": {
-                                "type": "string",
-                                "description": "Description of the MCP server's purpose and capabilities"
-                            },
-                            "command": {
-                                "type": "string",
-                                "description": "Command to run the MCP server (e.g., npx, uvx, docker)"
-                            },
-                            "args": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string"
-                                },
-                                "description": "Arguments for the MCP server command"
-                            },
-                            "source": {
-                                "type": "string",
-                                "description": "Path to local MCP server files (if applicable)"
-                            },
-                            "variables": {
-                                "type": "object",
-                                "description": "Variables to pass to the MCP server"
-                            }
-                        }
-                    }
-                },
-                "github": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "required": [
-                            "source",
-                            "version",
-                            "command",
-                            "args"
-                        ],
-                        "properties": {
-                            "source": {
-                                "type": "string",
-                                "description": "GitHub repository source (can be 'user/name', 'github.com/user/name', or 'https://github.com/user/name')"
-                            },
-                            "version": {
-                                "type": "string",
-                                "description": "Version tag for the MCP server"
-                            },
-                            "name": {
-                                "type": "string",
-                                "description": "Name of the MCP server (defaults to repository name)"
-                            },
-                            "description": {
-                                "type": "string",
-                                "description": "Description of the MCP server's purpose and capabilities"
-                            },
-                            "command": {
-                                "type": "string",
-                                "description": "Command to run the MCP server (e.g., npx, uvx, docker)"
-                            },
-                            "args": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string"
-                                },
-                                "description": "Arguments for the MCP server command"
-                            },
-                            "server_path": {
-                                "type": "string",
-                                "description": "Path within the repository where the MCP server is located",
-                                "default": ""
-                            },
-                            "variables": {
-                                "type": "object",
-                                "description": "Variables to pass to the MCP server"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "features": {
-            "type": "object",
-            "description": "Agent features configuration"
         },
         "env": {
             "type": "object",
-            "description": "Environment variables for this agent",
+            "description": "Global environment variables for all agents (overridden by agent/plugin env)",
             "additionalProperties": {
                 "type": "string"
+            }
+        },
+        "agents": {
+            "type": "array",
+            "description": "Multiple agents that can interact with each other",
+            "items": {
+                "type": "object",
+                "required": [
+                    "id",
+                    "name",
+                    "model"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "Unique identifier for the agent (optional)"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the agent"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Description of the agent's purpose and capabilities"
+                    },
+                    "system_prompt": {
+                        "type": "string",
+                        "description": "System prompt that defines the agent's behavior (optional)"
+                    },
+                    "model": {
+                        "type": "object",
+                        "required": [
+                            "provider",
+                            "model"
+                        ],
+                        "additionalProperties": false,
+                        "properties": {
+                            "provider": {
+                                "type": "string",
+                                "description": "Model provider (e.g., openai, anthropic)"
+                            },
+                            "model": {
+                                "type": "string",
+                                "description": "Model name/version"
+                            },
+                            "temperature": {
+                                "type": "number",
+                                "default": 0.7,
+                                "description": "Temperature for response generation",
+                                "validation": {
+                                    "range": {
+                                        "min": 0.0,
+                                        "max": 1.0
+                                    }
+                                }
+                            },
+                            "max_tokens": {
+                                "type": [
+                                    "integer",
+                                    "null"
+                                ],
+                                "description": "Maximum tokens in response (null for no limit)"
+                            },
+                            "top_p": {
+                                "type": [
+                                    "number",
+                                    "null"
+                                ],
+                                "description": "Top-p sampling parameter",
+                                "validation": {
+                                    "range": {
+                                        "min": 0.0,
+                                        "max": 1.0
+                                    }
+                                }
+                            },
+                            "frequency_penalty": {
+                                "type": [
+                                    "number",
+                                    "null"
+                                ],
+                                "description": "Penalty for token frequency"
+                            },
+                            "presence_penalty": {
+                                "type": [
+                                    "number",
+                                    "null"
+                                ],
+                                "description": "Penalty for token presence"
+                            }
+                        }
+                    },
+                    "features": {
+                        "type": "object",
+                        "description": "Agent features configuration",
+                        "additionalProperties": false,
+                        "properties": {
+                            "deep_reasoning": {
+                                "type": "boolean",
+                                "description": "Enables advanced reasoning",
+                                "default": false
+                            }
+                        }
+                    },
+                    "env": {
+                        "type": "object",
+                        "description": "Environment variables for this agent",
+                        "additionalProperties": {
+                            "type": "string"
+                        }
+                    },
+                    "plugins": {
+                        "type": "array",
+                        "description": "List of plugin definitions for this agent",
+                        "items": {
+                            "type": "object",
+                            "required": [
+                                "source",
+                                "type"
+                            ],
+                            "additionalProperties": false,
+                            "properties": {
+                                "source": {
+                                    "type": "string",
+                                    "enum": [
+                                        "local",
+                                        "github"
+                                    ]
+                                },
+                                "path": {
+                                    "type": "string"
+                                },
+                                "url": {
+                                    "type": "string"
+                                },
+                                "version": {
+                                    "type": "string"
+                                },
+                                "branch": {
+                                    "type": "string"
+                                },
+                                "type": {
+                                    "type": "string",
+                                    "enum": [
+                                        "sk",
+                                        "mcp",
+                                        "agently"
+                                    ]
+                                },
+                                "env": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                },
+                                "command": {
+                                    "type": "string"
+                                },
+                                "args": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                },
+                                "variables": {
+                                    "type": "object",
+                                    "additionalProperties": true
+                                }
+                            },
+                            "allOf": [
+                                {
+                                    "if": {
+                                        "properties": {
+                                            "source": {
+                                                "const": "local"
+                                            }
+                                        }
+                                    },
+                                    "then": {
+                                        "required": [
+                                            "path"
+                                        ],
+                                        "properties": {
+                                            "url": {
+                                                "enum": [
+                                                    null
+                                                ]
+                                            },
+                                            "version": {
+                                                "enum": [
+                                                    null
+                                                ]
+                                            },
+                                            "branch": {
+                                                "enum": [
+                                                    null
+                                                ]
+                                            }
+                                        }
+                                    }
+                                },
+                                {
+                                    "if": {
+                                        "properties": {
+                                            "source": {
+                                                "const": "github"
+                                            }
+                                        }
+                                    },
+                                    "then": {
+                                        "required": [
+                                            "url"
+                                        ],
+                                        "oneOf": [
+                                            {
+                                                "required": [
+                                                    "version"
+                                                ],
+                                                "properties": {
+                                                    "branch": {
+                                                        "enum": [
+                                                            null
+                                                        ]
+                                                    }
+                                                }
+                                            },
+                                            {
+                                                "required": [
+                                                    "branch"
+                                                ],
+                                                "properties": {
+                                                    "version": {
+                                                        "enum": [
+                                                            null
+                                                        ]
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "if": {
+                                        "properties": {
+                                            "type": {
+                                                "const": "sk"
+                                            }
+                                        }
+                                    },
+                                    "then": {
+                                        "not": {
+                                            "anyOf": [
+                                                {
+                                                    "required": [
+                                                        "command"
+                                                    ]
+                                                },
+                                                {
+                                                    "required": [
+                                                        "args"
+                                                    ]
+                                                },
+                                                {
+                                                    "required": [
+                                                        "variables"
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                },
+                                {
+                                    "if": {
+                                        "properties": {
+                                            "type": {
+                                                "const": "mcp"
+                                            }
+                                        }
+                                    },
+                                    "then": {
+                                        "required": [
+                                            "command",
+                                            "args"
+                                        ],
+                                        "not": {
+                                            "required": [
+                                                "variables"
+                                            ]
+                                        }
+                                    }
+                                },
+                                {
+                                    "if": {
+                                        "properties": {
+                                            "type": {
+                                                "const": "agently"
+                                            }
+                                        }
+                                    },
+                                    "then": {
+                                        "not": {
+                                            "anyOf": [
+                                                {
+                                                    "required": [
+                                                        "command"
+                                                    ]
+                                                },
+                                                {
+                                                    "required": [
+                                                        "args"
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
             }
         }
     }

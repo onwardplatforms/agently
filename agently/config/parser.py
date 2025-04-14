@@ -5,7 +5,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any, Dict, List, Optional, Union
 from uuid import uuid4
 
 import jsonschema
@@ -22,11 +22,42 @@ logger = logging.getLogger(__name__)
 ENV_VAR_PATTERN = re.compile(r"\$\{\{\s*env\.([A-Za-z0-9_]+)\s*\}\}")
 
 
-def load_agent_config(file_path: Union[str, Path]) -> AgentConfig:
+def find_config_file(file_path: Optional[str] = None) -> Optional[Path]:
+    """Find the agent configuration file.
+
+    Checks for:
+    1. Explicit file path if provided
+    2. agently.yaml in current directory
+    3. agently.yml in current directory
+
+    Args:
+        file_path: Optional explicit path to configuration file
+
+    Returns:
+        Path to configuration file if found, None otherwise
+    """
+    # Check explicit path first
+    if file_path and Path(file_path).exists():
+        logger.debug(f"Using specified config file: {file_path}")
+        return Path(file_path)
+
+    # Check default paths
+    for ext in ["yaml", "yml"]:
+        default_path = Path.cwd() / f"agently.{ext}"
+        if default_path.exists():
+            logger.debug(f"Found config file: {default_path}")
+            return default_path
+
+    logger.debug("No config file found")
+    return None
+
+
+def load_agent_config(file_path: Union[str, Path], agent_id: Optional[str] = None) -> AgentConfig:
     """Load agent configuration from YAML.
 
     Args:
         file_path: Path to the YAML configuration file
+        agent_id: Optional ID of specific agent to load from multi-agent config
 
     Returns:
         AgentConfig instance
@@ -34,6 +65,7 @@ def load_agent_config(file_path: Union[str, Path]) -> AgentConfig:
     Raises:
         FileNotFoundError: If the configuration file doesn't exist
         jsonschema.exceptions.ValidationError: If the configuration is invalid
+        ValueError: If agent_id is specified but not found in config
     """
     file_path = Path(file_path)
     logger.info(f"Loading agent configuration from {file_path}")
@@ -69,8 +101,78 @@ def load_agent_config(file_path: Union[str, Path]) -> AgentConfig:
     load_dotenv()  # Load .env file if exists
     config = resolve_environment_variables(config)
 
-    # 4. Convert to AgentConfig
-    return create_agent_config(config, file_path)
+    # 4. Check if we have a multi-agent config (we always do now with the new schema)
+    if "agents" in config and config["agents"]:
+        # Multi-agent configuration
+        if agent_id:
+            # Find the specific agent by ID
+            for agent_config in config["agents"]:
+                # Generate ID if not provided
+                if "id" not in agent_config:
+                    agent_config["id"] = f"agent-{uuid4().hex[:8]}"
+
+                if agent_config["id"] == agent_id:
+                    return create_agent_config(agent_config, file_path)
+
+            # Agent ID not found
+            logger.error(f"Agent with ID '{agent_id}' not found in configuration")
+            raise ValueError(f"Agent with ID '{agent_id}' not found in configuration")
+        else:
+            # Use the first agent if no ID specified
+            first_agent = config["agents"][0]
+            # Generate ID if not provided
+            if "id" not in first_agent:
+                first_agent["id"] = f"agent-{uuid4().hex[:8]}"
+
+            return create_agent_config(first_agent, file_path)
+    else:
+        # This should not happen with the new schema, as agents is required
+        logger.error("No agents found in configuration")
+        raise ValueError("No agents found in configuration")
+
+
+def get_all_agents(file_path: Union[str, Path]) -> List[Dict[str, Any]]:
+    """Get all agents from a configuration file.
+
+    Args:
+        file_path: Path to the configuration file
+
+    Returns:
+        List of agent configurations
+
+    Raises:
+        FileNotFoundError: If the configuration file doesn't exist
+    """
+    file_path = Path(file_path)
+    logger.info(f"Loading all agents from {file_path}")
+
+    if not file_path.exists():
+        logger.error(f"Configuration file not found: {file_path}")
+        raise FileNotFoundError(f"Configuration file not found: {file_path}")
+
+    # Load YAML file
+    try:
+        with open(file_path, "r") as f:
+            config = yaml.safe_load(f)
+    except Exception as e:
+        logger.error(f"Error loading YAML: {e}")
+        raise ValueError(f"Error loading YAML configuration: {e}")
+
+    # With the new schema, we always expect an agents array
+    if "agents" in config and config["agents"]:
+        # Multi-agent configuration
+        agents = config["agents"]
+
+        # Ensure each agent has an ID
+        for agent in agents:
+            if "id" not in agent:
+                agent["id"] = f"agent-{uuid4().hex[:8]}"
+
+        return agents
+    else:
+        # This should not happen with the new schema, but handle it just in case
+        logger.error("No agents found in configuration")
+        raise ValueError("No agents found in configuration")
 
 
 def resolve_environment_variables(config: Dict[str, Any]) -> Dict[str, Any]:
@@ -156,167 +258,109 @@ def create_agent_config(yaml_config: Dict[str, Any], config_path: Path) -> Agent
         presence_penalty=yaml_config["model"].get("presence_penalty"),
     )
 
+    # Process features if present
+    features = yaml_config.get("features", {})
+    deep_reasoning = features.get("deep_reasoning", False) if features else False
+
     # Create plugin configs
     plugin_configs = []
 
     # Create MCP server configs
     mcp_server_configs = []
 
-    # Process plugins by type
-    plugins_yaml = yaml_config.get("plugins", {})
+    # Process plugins (flat array in the new schema)
+    for plugin in yaml_config.get("plugins", []):
+        # Get the source type (local or github)
+        source_type = plugin["source"]
+        # Get the plugin type (sk, mcp, or agently)
+        plugin_type = plugin["type"]
 
-    # Process local plugins
-    for local_plugin in plugins_yaml.get("local", []):
-        # Determine plugin type (sk or mcp)
-        plugin_type = local_plugin.get("type", "sk")  # Default to "sk" if not specified
+        if source_type == "local":
+            # Handle local plugin
+            plugin_path = plugin["path"]
+            if not os.path.isabs(plugin_path):
+                plugin_path = (config_path.parent / plugin_path).resolve()
 
-        # Resolve relative path from config file location
-        plugin_path = local_plugin["source"]
-        if not os.path.isabs(plugin_path):
-            plugin_path = (config_path.parent / plugin_path).resolve()
+            local_source: PluginSourceType = LocalPluginSource(path=Path(plugin_path), plugin_type=plugin_type)
 
-        local_source: PluginSourceType = LocalPluginSource(
-            path=Path(plugin_path), plugin_type=plugin_type  # Set the plugin type
-        )
+            # For MCP type plugins, create additional MCP server config
+            if plugin_type == "mcp":
+                # Get the name for the MCP server (use path basename if not specified)
+                name = plugin.get("name", Path(plugin_path).stem)
 
-        # For MCP type plugins, handle MCP-specific fields
-        if plugin_type == "mcp":
-            # Note: MCP servers are treated as plugins for installation/management,
-            # but also need separate MCPServerConfig objects for runtime initialization.
-            # That's why we create both a PluginConfig (for unified plugin management)
-            # and an MCPServerConfig (for backward compatibility and runtime usage).
+                if "command" in plugin and "args" in plugin:
+                    mcp_server_configs.append(
+                        MCPServerConfig(
+                            name=name,
+                            command=plugin["command"],
+                            args=plugin.get("args", []),
+                            description=plugin.get("description", ""),
+                            variables=plugin.get("variables", {}),
+                            source_type="local",
+                            source_path=str(plugin_path),
+                        )
+                    )
 
-            # Create both a plugin config and an MCP server config
-            if "command" in local_plugin and "args" in local_plugin:
-                # Get the source object's name for the MCP server
-                name = local_plugin.get("name", Path(plugin_path).stem)
+            # Add to plugin_configs
+            plugin_configs.append(PluginConfig(source=local_source, variables=plugin.get("variables", {})))
+
+        elif source_type == "github":
+            # Handle GitHub plugin
+            github_source: PluginSourceType = GitHubPluginSource(
+                repo_url=plugin["url"],
+                version=plugin.get("version", plugin.get("branch", "main")),
+                plugin_path=plugin.get("plugin_path", ""),
+                namespace=plugin.get("namespace", ""),
+                name=plugin.get("name", ""),
+                plugin_type=plugin_type,
+            )
+
+            # If it's an MCP server, create additional MCP server config
+            if plugin_type == "mcp":
+                setattr(github_source, "command", plugin.get("command", "python"))
+                setattr(github_source, "args", plugin.get("args", []))
+                setattr(github_source, "description", plugin.get("description", ""))
+                setattr(github_source, "server_path", plugin.get("server_path", ""))
+
+                name = github_source.name or plugin.get("name", "")
+                # Extract name from URL if not specified
+                if not name and hasattr(github_source, "repo_url"):
+                    repo_url = github_source.repo_url
+                    if "/" in repo_url:
+                        name = repo_url.split("/")[-1]
+                        # Remove agently-mcp- prefix if it exists
+                        if name.startswith("agently-mcp-"):
+                            name = name[len("agently-mcp-") :]
 
                 mcp_server_configs.append(
                     MCPServerConfig(
                         name=name,
-                        command=local_plugin["command"],
-                        args=local_plugin.get("args", []),
-                        description=local_plugin.get("description", ""),
-                        variables=local_plugin.get("variables", {}),
-                        source_type="local",
-                        source_path=str(plugin_path),
+                        command=plugin.get("command", "python"),
+                        args=plugin.get("args", []),
+                        description=plugin.get("description", ""),
+                        variables=plugin.get("variables", {}),
+                        source_type="github",
+                        repo_url=github_source.repo_url if hasattr(github_source, "repo_url") else None,
+                        version=github_source.version if hasattr(github_source, "version") else None,
+                        server_path=plugin.get("server_path", ""),
                     )
                 )
 
-                # Also add to plugin_configs for initialization
-                plugin_configs.append(PluginConfig(source=local_source, variables=local_plugin.get("variables", {})))
-        else:
-            # For non-MCP plugins, just add them to plugin_configs
-            plugin_configs.append(PluginConfig(source=local_source, variables=local_plugin.get("variables", {})))
-
-    # Process GitHub plugins
-    for github_plugin in plugins_yaml.get("github", []):
-        # Determine plugin type (sk or mcp)
-        plugin_type = github_plugin.get("type", "sk")  # Default to "sk" if not specified
-
-        github_source: PluginSourceType = GitHubPluginSource(
-            repo_url=github_plugin["source"],
-            version=github_plugin.get("version", "main"),  # Default to main if not specified
-            plugin_path=github_plugin.get("plugin_path", ""),
-            namespace=github_plugin.get("namespace", ""),
-            name=github_plugin.get("name", ""),
-            plugin_type=plugin_type,  # Set the plugin type
-        )
-
-        # If it's an MCP server, set additional properties
-        if github_source.plugin_type == "mcp":
-            setattr(github_source, "command", github_plugin.get("command", "python"))
-            setattr(github_source, "args", github_plugin.get("args", []))
-            setattr(github_source, "description", github_plugin.get("description", ""))
-            setattr(github_source, "server_path", github_plugin.get("server_path", ""))
-
-            # Note: MCP servers are treated as plugins for installation/management,
-            # but also need separate MCPServerConfig objects for runtime initialization.
-            # That's why we create both a PluginConfig (for unified plugin management)
-            # and an MCPServerConfig (for backward compatibility and runtime usage).
-            name = github_source.name
-
-            mcp_server_configs.append(
-                MCPServerConfig(
-                    name=name,
-                    command=github_plugin.get("command", "python"),
-                    args=github_plugin.get("args", []),
-                    description=github_plugin.get("description", ""),
-                    variables=github_plugin.get("variables", {}),
-                    source_type="github",
-                    repo_url=github_source.repo_url if hasattr(github_source, "repo_url") else None,
-                    version=github_source.version if hasattr(github_source, "version") else None,
-                    server_path=github_plugin.get("server_path", ""),
-                )
-            )
-
-        plugin_configs.append(PluginConfig(source=github_source, variables=github_plugin.get("variables", {})))
-
-    # Process MCP servers by type
-    mcp_servers_yaml = yaml_config.get("mcp_servers", {})
-
-    # Process local MCP servers
-    for local_mcp in mcp_servers_yaml.get("local", []):
-        source_path = None
-        if "source" in local_mcp:
-            source_path = local_mcp["source"]
-            if not os.path.isabs(source_path):
-                source_path = str((config_path.parent / source_path).resolve())
-
-        mcp_server_configs.append(
-            MCPServerConfig(
-                name=local_mcp["name"],
-                command=local_mcp["command"],
-                args=local_mcp.get("args", []),
-                description=local_mcp.get("description", ""),
-                variables=local_mcp.get("variables", {}),
-                source_type="local",
-                source_path=source_path,
-            )
-        )
-
-    # Process GitHub MCP servers
-    for github_mcp in mcp_servers_yaml.get("github", []):
-        name = github_mcp.get("name", "")
-        # If name is not provided, extract it from the source
-        if not name:
-            source = github_mcp["source"]
-            # Extract the name from the source (repo name without prefix)
-            if "/" in source:
-                name = source.split("/")[-1]
-                # Remove agently-mcp- prefix if it exists
-                if name.startswith("agently-mcp-"):
-                    name = name[len("agently-mcp-") :]
-
-        mcp_server_configs.append(
-            MCPServerConfig(
-                name=name,
-                command=github_mcp["command"],
-                args=github_mcp.get("args", []),
-                description=github_mcp.get("description", ""),
-                variables=github_mcp.get("variables", {}),
-                source_type="github",
-                repo_url=github_mcp["source"],
-                version=github_mcp.get("version", "main"),
-                server_path=github_mcp.get("server_path", ""),
-            )
-        )
+            # Add to plugin_configs
+            plugin_configs.append(PluginConfig(source=github_source, variables=plugin.get("variables", {})))
 
     # Set log level
     log_level = LogLevel.NONE  # Default
 
-    # Check for continuous reasoning flag
-    continuous_reasoning = yaml_config.get("continuous_reasoning", False)
-
-    # Create agent config
+    # Create agent config with system_prompt now optional
     return AgentConfig(
         id=agent_id,
         name=yaml_config["name"],
         description=yaml_config.get("description", ""),
-        system_prompt=yaml_config["system_prompt"],
+        system_prompt=yaml_config.get("system_prompt", ""),  # Now optional
         model=model_config,
         plugins=plugin_configs,
         mcp_servers=mcp_server_configs,
         log_level=log_level,
-        continuous_reasoning=continuous_reasoning,
+        continuous_reasoning=deep_reasoning,  # Use the deep_reasoning feature
     )

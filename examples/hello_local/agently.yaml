@@ -1,21 +1,27 @@
 version: "1"
-name: "Hello Agent"
-description: "A simple agent that demonstrates plugin usage"
-system_prompt: >
-  You are a friendly assistant that helps with greetings.
-model:
-  provider: "openai"
-  model: "gpt-4o"
-  temperature: 0.5
-plugins:
-  local:
-    - source: "./plugins/hello"
-      variables:
-        default_name: "Friend"
-  # github:
-  #   - source: "onwardplatforms/hello"
-  #     version: "main"
-  #     variables:
-  #       default_name: "Remote Friend"
+
+agents:
+  - id: "hello_agent"
+    name: "Hello Agent"
+    description: "A simple agent that demonstrates plugin usage"
+    system_prompt: >
+      You are a friendly assistant that helps with greetings.
+    model:
+      provider: "openai"
+      model: "gpt-4o"
+      temperature: 0.5
+    plugins:
+      - source: "local"
+        type: "agently"
+        path: "./plugins/hello"
+        variables:
+          default_name: "Friend"
+      # - source: "github"
+      #   type: "agently"
+      #   url: "onwardplatforms/hello"
+      #   version: "main"
+      #   variables:
+      #     default_name: "Remote Friend"
+
 # env:
 #   OPENAI_API_KEY: ${{ env.OPENAI_API_KEY }}

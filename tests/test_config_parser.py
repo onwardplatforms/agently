@@ -26,21 +26,23 @@ def temp_yaml_config():
         temp_file.write(
             b"""
 version: "1"
-name: "Test Agent"
-description: "A test agent"
-system_prompt: "You are a test assistant."
-model:
-  provider: "openai"
-  model: "gpt-4o"
-  temperature: 0.7
-plugins:
-  local:
-    - source: "./plugins/test"
-      variables:
-        test_var: "test_value"
-        default_name: "TestFriend"
-env:
-  API_KEY: ${{ env.TEST_API_KEY }}
+agents:
+  - name: "Test Agent"
+    description: "A test agent"
+    system_prompt: "You are a test assistant."
+    model:
+      provider: "openai"
+      model: "gpt-4o"
+      temperature: 0.7
+    plugins:
+      - source: "local"
+        type: "agently"
+        path: "./plugins/test"
+        variables:
+          test_var: "test_value"
+          default_name: "TestFriend"
+    env:
+      API_KEY: ${{ env.TEST_API_KEY }}
 """
         )
     yield Path(temp_file.name)
@@ -116,16 +118,17 @@ def temp_yaml_with_env_vars():
         temp_file.write(
             b"""
 version: "1"
-name: "Environment Test Agent"
-description: "Testing environment variable precedence"
-system_prompt: "You are a test assistant with ${{ env.SHARED_VAR }} and ${{ env.CONFIG_VAR }}."
-model:
-  provider: "openai"
-  model: "gpt-4o"
 env:
   CONFIG_VAR: config_value
   SHARED_VAR: from_config
   SYSTEM_VAR: ${{ env.SYSTEM_ENV_VAR }}
+agents:
+  - name: "Environment Test Agent"
+    description: "Testing environment variable precedence"
+    system_prompt: "You are a test assistant with ${{ env.SHARED_VAR }} and ${{ env.CONFIG_VAR }}."
+    model:
+      provider: "openai"
+      model: "gpt-4o"
 """
         )
     yield Path(temp_file.name)
@@ -205,12 +208,13 @@ def invalid_yaml_config():
         temp_file.write(
             b"""
 version: "1"
-name: "Invalid Agent"
-# Missing required system_prompt
-model:
-  provider: "openai"
-  # Missing required model field
-  temperature: 0.7
+agents:
+  - name: "Invalid Agent"
+    # Missing required system_prompt
+    model:
+      provider: "openai"
+      # Missing required model field
+      temperature: 0.7
 """
         )
     yield Path(temp_file.name)

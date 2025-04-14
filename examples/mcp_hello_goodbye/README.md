@@ -65,13 +65,16 @@ The agent configuration (`agently.yaml`) includes:
 2. Model configuration (provider, model name, temperature)
 3. MCP server configuration:
    ```yaml
-   mcp_servers:
-     local:
-       - name: "HelloGoodbye"
-         description: "A plugin that can say hello and goodbye to users"
-         command: "python"
-         args:
-           - "${PWD}/servers/hello_goodbye_server.py"
+   version: "1"
+   agents:
+     - name: "Hello-Goodbye Agent"
+       # Other agent configuration...
+       plugins:
+         - source: "local"
+           type: "mcp"
+           path: "servers/hello_goodbye_server.py"
+           command: "python"
+           args: ["servers/hello_goodbye_server.py"]
    ```
 
 When the agent is initialized, Agently automatically launches the MCP server as a subprocess and connects to it using the Model Context Protocol.

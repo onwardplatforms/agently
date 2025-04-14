@@ -11,7 +11,16 @@ This example demonstrates how to use the Model Context Protocol (MCP) Git server
 
 2. **Important**: Update the `agently.yaml` file to point to a valid Git repository on your system:
    ```yaml
-   args: ["mcp-server-git", "--repository", "/path/to/valid/git/repository"]
+   version: "1"
+   agents:
+     - name: "Git MCP Agent"
+       plugins:
+         - source: "github"
+           type: "mcp"
+           url: "modelcontextprotocol/servers"
+           version: "main"
+           command: "uvx"
+           args: ["mcp-server-git", "--repository", "/path/to/valid/git/repository"]
    ```
    Replace `/path/to/valid/git/repository` with an actual Git repository path on your system.
 
