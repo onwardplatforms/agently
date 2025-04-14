@@ -19,28 +19,31 @@ def temp_local_yaml_config():
         temp_file.write(
             b"""
 version: "1"
-name: "Local Plugin Test Agent"
-description: "An agent that tests local plugins"
-system_prompt: "You are a test assistant."
-model:
-  provider: "openai"
-  model: "gpt-4o"
-  temperature: 0.7
-plugins:
-  local:
-    - source: "./plugins/hello"
-      variables:
-        default_name: "TestFriend"
-    - source: "/absolute/path/to/plugin"
-      variables:
-        option: "value"
-    - source: "./plugins/mcp-server"
-      type: "mcp"
-      command: "python"
-      args:
-        - "server.py"
-      variables:
-        default_name: "MCPFriend"
+agents:
+  - name: "Local Plugin Test Agent"
+    description: "An agent that tests local plugins"
+    system_prompt: "You are a test assistant."
+    model:
+      provider: "openai"
+      model: "gpt-4o"
+      temperature: 0.7
+    plugins:
+      - source: "local"
+        type: "agently"
+        path: "./plugins/hello"
+        variables:
+          default_name: "TestFriend"
+      - source: "local"
+        type: "agently"
+        path: "/absolute/path/to/plugin"
+        variables:
+          option: "value"
+      - source: "local"
+        type: "mcp"
+        path: "./plugins/mcp-server"
+        command: "python"
+        args:
+          - "server.py"
 """
         )
     yield Path(temp_file.name)
@@ -173,20 +176,19 @@ def test_load_local_plugin_config(mock_load, mock_isabs, temp_local_yaml_config)
     assert isinstance(plugin1.source, LocalPluginSource)
     assert plugin1.source.path.name == "hello"
     assert plugin1.variables == {"default_name": "TestFriend"}
-    assert plugin1.source.plugin_type == "sk"  # Default type is "sk"
+    assert plugin1.source.plugin_type == "agently"  # Plugin type is 'agently'
 
     # Check second plugin
     plugin2 = config.plugins[1]
     assert isinstance(plugin2.source, LocalPluginSource)
     assert str(plugin2.source.path).endswith("to/plugin")
     assert plugin2.variables == {"option": "value"}
-    assert plugin2.source.plugin_type == "sk"
+    assert plugin2.source.plugin_type == "agently"
     
     # Check third plugin (MCP type)
     plugin3 = config.plugins[2]
     assert isinstance(plugin3.source, LocalPluginSource)
     assert plugin3.source.path.name == "mcp-server"
-    assert plugin3.variables == {"default_name": "MCPFriend"}
     assert plugin3.source.plugin_type == "mcp"
 
 

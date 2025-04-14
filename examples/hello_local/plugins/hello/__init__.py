@@ -6,7 +6,7 @@ from typing import Optional, Dict
 from semantic_kernel.functions import kernel_function
 
 from agently.plugins.base import Plugin, PluginVariable
-# Import styles directly from the SDK
+# Import styles directly from the SDKs
 from agently_sdk import styles
 
 

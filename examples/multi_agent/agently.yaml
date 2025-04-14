@@ -1,21 +1,27 @@
 version: "1"
+env:
+  OPENAI_API_KEY: ${{ env.OPENAI_API_KEY }} 
+
 agents:
-  - id: "researcher"
-    name: "Research Agent"
-    description: "Specializes in finding and analyzing information"
-    system_prompt: >
+  - id: researcher2
+    name: Research Agent
+    description: Specializes in finding and analyzing information
+    model:
+      provider: openai
+      model: gpt-4o
+      temperature: 0.2
+    system_prompt: |
       You are a research assistant with expertise in finding and analyzing information.
       Focus on providing comprehensive, accurate information with proper citations.
       When you don't know something, be transparent about the limits of your knowledge.
-    model:
-      provider: "openai"
-      model: "gpt-4o"
-      temperature: 0.2
+    features:
+      deep_reasoning: true
     plugins:
-      local:
-        - source: "../hello_local/plugins/hello"
-          variables:
-            default_name: "Researcher"
+      - source: local
+        type: agently
+        path: ../hello_local/plugins/hello
+        variables:
+          default_name: Researcher
 
   - id: "coder"
     name: "Coding Agent"
@@ -28,9 +34,12 @@ agents:
       provider: "openai"
       model: "gpt-4o"
       temperature: 0.3
+    features:
+      deep_reasoning: false
     plugins:
-      local:
-        - source: "../coder_agent/plugins/coder"
+      - source: "local"
+        type: "sk"
+        path: "../coder_agent/plugins/coder"
 
   - id: "creative"
     name: "Creative Agent"
@@ -44,11 +53,45 @@ agents:
       model: "gpt-4o"
       temperature: 0.7
     plugins:
-      local:
-        - source: "../hello_local/plugins/hello"
-          variables:
-            default_name: "Creative"
+      - source: "local"
+        type: "agently"
+        path: "../hello_local/plugins/hello"
+        variables:
+          default_name: "Creative"
 
-# Environment variables are shared across all agents
-env:
-  OPENAI_API_KEY: ${{ env.OPENAI_API_KEY }} 
+  - id: "devops"
+    name: "DevOps Agent"
+    description: "Specializes in deployment, infrastructure, and operations"
+    model:
+      provider: "openai"
+      model: "gpt-4o"
+      temperature: 0.3
+    plugins:
+      - source: "local"
+        type: "agently"
+        path: "../hello_local/plugins/hello"
+        variables:
+          default_name: "DevOps"
+
+  - id: "mcp-agent"
+    name: "MCP Example Agent"
+    description: "Demonstrates using an MCP plugin"
+    system_prompt: >
+      You are an assistant that can run commands through the MCP plugin.
+      Demonstrate how to use the hello-goodbye MCP server to greet users.
+    model:
+      provider: "openai"
+      model: "gpt-4o"
+      temperature: 0.5
+    plugins:
+      - source: "github"
+        url: "modelcontextprotocol/servers"
+        type: "mcp"
+        version: "2025.4.8"
+        command: "uvx"
+        args: ["mcp-server-git", "--repository", "/Users/justinoconnor/Code/onward/agently"] 
+      - source: "local"
+        type: "agently"
+        path: "../hello_local/plugins/hello"
+        variables:
+          default_name: "DevOps"

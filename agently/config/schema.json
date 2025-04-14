@@ -3,15 +3,27 @@
     "title": "Agently Configuration",
     "type": "object",
     "required": [
-        "version"
+        "version",
+        "agents"
     ],
+    "additionalProperties": false,
     "properties": {
         "version": {
             "type": "string",
-            "enum": [
-                "1"
-            ],
-            "description": "Configuration format version"
+            "description": "Configuration format version",
+            "validation": {
+                "pattern": "^\\d+$",
+                "options": [
+                    "1"
+                ]
+            }
+        },
+        "env": {
+            "type": "object",
+            "description": "Global environment variables for all agents (overridden by agent/plugin env)",
+            "additionalProperties": {
+                "type": "string"
+            }
         },
         "agents": {
             "type": "array",
@@ -20,13 +32,13 @@
                 "type": "object",
                 "required": [
                     "name",
-                    "system_prompt",
                     "model"
                 ],
+                "additionalProperties": false,
                 "properties": {
                     "id": {
                         "type": "string",
-                        "description": "Unique identifier for the agent"
+                        "description": "Unique identifier for the agent (optional)"
                     },
                     "name": {
                         "type": "string",
@@ -38,7 +50,7 @@
                     },
                     "system_prompt": {
                         "type": "string",
-                        "description": "System prompt that defines the agent's behavior"
+                        "description": "System prompt that defines the agent's behavior (optional)"
                     },
                     "model": {
                         "type": "object",
@@ -46,6 +58,7 @@
                             "provider",
                             "model"
                         ],
+                        "additionalProperties": false,
                         "properties": {
                             "provider": {
                                 "type": "string",
@@ -57,10 +70,14 @@
                             },
                             "temperature": {
                                 "type": "number",
-                                "minimum": 0,
-                                "maximum": 1,
                                 "default": 0.7,
-                                "description": "Temperature for response generation"
+                                "description": "Temperature for response generation",
+                                "validation": {
+                                    "range": {
+                                        "min": 0.0,
+                                        "max": 1.0
+                                    }
+                                }
                             },
                             "max_tokens": {
                                 "type": [
@@ -74,9 +91,13 @@
                                     "number",
                                     "null"
                                 ],
-                                "minimum": 0,
-                                "maximum": 1,
-                                "description": "Top-p sampling parameter"
+                                "description": "Top-p sampling parameter",
+                                "validation": {
+                                    "range": {
+                                        "min": 0.0,
+                                        "max": 1.0
+                                    }
+                                }
                             },
                             "frequency_penalty": {
                                 "type": [
@@ -94,110 +115,17 @@
                             }
                         }
                     },
-                    "plugins": {
-                        "type": "object",
-                        "properties": {
-                            "local": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "required": [
-                                        "source"
-                                    ],
-                                    "properties": {
-                                        "source": {
-                                            "type": "string",
-                                            "description": "Path to plugin (for local plugins)"
-                                        },
-                                        "type": {
-                                            "type": "string",
-                                            "enum": [
-                                                "sk",
-                                                "mcp"
-                                            ],
-                                            "default": "sk",
-                                            "description": "Plugin type (sk = semantic kernel, mcp = managed code plugin)"
-                                        },
-                                        "name": {
-                                            "type": "string",
-                                            "description": "Optional name override for the plugin"
-                                        },
-                                        "command": {
-                                            "type": "string",
-                                            "description": "Command to run (for MCP plugins)"
-                                        },
-                                        "args": {
-                                            "type": "array",
-                                            "items": {
-                                                "type": "string"
-                                            },
-                                            "description": "Arguments for the command (for MCP plugins)"
-                                        },
-                                        "variables": {
-                                            "type": "object",
-                                            "description": "Variables to pass to the plugin"
-                                        }
-                                    }
-                                }
-                            },
-                            "github": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "required": [
-                                        "source",
-                                        "version"
-                                    ],
-                                    "properties": {
-                                        "source": {
-                                            "type": "string",
-                                            "description": "GitHub repository source (can be 'user/name', 'github.com/user/name', or 'https://github.com/user/name')"
-                                        },
-                                        "version": {
-                                            "type": "string",
-                                            "description": "Version tag (for github plugins)"
-                                        },
-                                        "type": {
-                                            "type": "string",
-                                            "enum": [
-                                                "sk",
-                                                "mcp"
-                                            ],
-                                            "default": "sk",
-                                            "description": "Plugin type (sk = semantic kernel, mcp = managed code plugin)"
-                                        },
-                                        "name": {
-                                            "type": "string",
-                                            "description": "Optional name override for the plugin"
-                                        },
-                                        "plugin_path": {
-                                            "type": "string",
-                                            "description": "Path within the repository (for github plugins)",
-                                            "default": ""
-                                        },
-                                        "command": {
-                                            "type": "string",
-                                            "description": "Command to run (for MCP plugins)"
-                                        },
-                                        "args": {
-                                            "type": "array",
-                                            "items": {
-                                                "type": "string"
-                                            },
-                                            "description": "Arguments for the command (for MCP plugins)"
-                                        },
-                                        "variables": {
-                                            "type": "object",
-                                            "description": "Variables to pass to the plugin"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
                     "features": {
                         "type": "object",
-                        "description": "Agent features configuration"
+                        "description": "Agent features configuration",
+                        "additionalProperties": false,
+                        "properties": {
+                            "deep_reasoning": {
+                                "type": "boolean",
+                                "description": "Enables advanced reasoning",
+                                "default": false
+                            }
+                        }
                     },
                     "env": {
                         "type": "object",
@@ -205,190 +133,216 @@
                         "additionalProperties": {
                             "type": "string"
                         }
-                    }
-                }
-            }
-        },
-        "name": {
-            "type": "string",
-            "description": "Name of the agent (single agent configuration)"
-        },
-        "id": {
-            "type": "string",
-            "description": "Unique identifier for the agent (single agent configuration)"
-        },
-        "description": {
-            "type": "string",
-            "description": "Description of the agent's purpose and capabilities"
-        },
-        "system_prompt": {
-            "type": "string",
-            "description": "System prompt that defines the agent's behavior"
-        },
-        "model": {
-            "type": "object",
-            "required": [
-                "provider",
-                "model"
-            ],
-            "properties": {
-                "provider": {
-                    "type": "string",
-                    "description": "Model provider (e.g., openai, anthropic)"
-                },
-                "model": {
-                    "type": "string",
-                    "description": "Model name/version"
-                },
-                "temperature": {
-                    "type": "number",
-                    "minimum": 0,
-                    "maximum": 1,
-                    "default": 0.7,
-                    "description": "Temperature for response generation"
-                },
-                "max_tokens": {
-                    "type": [
-                        "integer",
-                        "null"
-                    ],
-                    "description": "Maximum tokens in response (null for no limit)"
-                },
-                "top_p": {
-                    "type": [
-                        "number",
-                        "null"
-                    ],
-                    "minimum": 0,
-                    "maximum": 1,
-                    "description": "Top-p sampling parameter"
-                },
-                "frequency_penalty": {
-                    "type": [
-                        "number",
-                        "null"
-                    ],
-                    "description": "Penalty for token frequency"
-                },
-                "presence_penalty": {
-                    "type": [
-                        "number",
-                        "null"
-                    ],
-                    "description": "Penalty for token presence"
-                }
-            }
-        },
-        "plugins": {
-            "type": "object",
-            "properties": {
-                "local": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "required": [
-                            "source"
-                        ],
-                        "properties": {
-                            "source": {
-                                "type": "string",
-                                "description": "Path to plugin (for local plugins)"
-                            },
-                            "type": {
-                                "type": "string",
-                                "enum": [
-                                    "sk",
-                                    "mcp"
-                                ],
-                                "default": "sk",
-                                "description": "Plugin type (sk = semantic kernel, mcp = managed code plugin)"
-                            },
-                            "name": {
-                                "type": "string",
-                                "description": "Optional name override for the plugin"
-                            },
-                            "command": {
-                                "type": "string",
-                                "description": "Command to run (for MCP plugins)"
-                            },
-                            "args": {
-                                "type": "array",
-                                "items": {
+                    },
+                    "plugins": {
+                        "type": "array",
+                        "description": "List of plugin definitions for this agent",
+                        "items": {
+                            "type": "object",
+                            "required": [
+                                "source",
+                                "type"
+                            ],
+                            "additionalProperties": false,
+                            "properties": {
+                                "source": {
+                                    "type": "string",
+                                    "enum": [
+                                        "local",
+                                        "github"
+                                    ]
+                                },
+                                "path": {
                                     "type": "string"
                                 },
-                                "description": "Arguments for the command (for MCP plugins)"
-                            },
-                            "variables": {
-                                "type": "object",
-                                "description": "Variables to pass to the plugin"
-                            }
-                        }
-                    }
-                },
-                "github": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "required": [
-                            "source",
-                            "version"
-                        ],
-                        "properties": {
-                            "source": {
-                                "type": "string",
-                                "description": "GitHub repository source (can be 'user/name', 'github.com/user/name', or 'https://github.com/user/name')"
-                            },
-                            "version": {
-                                "type": "string",
-                                "description": "Version tag (for github plugins)"
-                            },
-                            "type": {
-                                "type": "string",
-                                "enum": [
-                                    "sk",
-                                    "mcp"
-                                ],
-                                "default": "sk",
-                                "description": "Plugin type (sk = semantic kernel, mcp = managed code plugin)"
-                            },
-                            "name": {
-                                "type": "string",
-                                "description": "Optional name override for the plugin"
-                            },
-                            "plugin_path": {
-                                "type": "string",
-                                "description": "Path within the repository (for github plugins)",
-                                "default": ""
-                            },
-                            "command": {
-                                "type": "string",
-                                "description": "Command to run (for MCP plugins)"
-                            },
-                            "args": {
-                                "type": "array",
-                                "items": {
+                                "url": {
                                     "type": "string"
                                 },
-                                "description": "Arguments for the command (for MCP plugins)"
+                                "version": {
+                                    "type": "string"
+                                },
+                                "branch": {
+                                    "type": "string"
+                                },
+                                "type": {
+                                    "type": "string",
+                                    "enum": [
+                                        "sk",
+                                        "mcp",
+                                        "agently"
+                                    ]
+                                },
+                                "env": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                },
+                                "command": {
+                                    "type": "string"
+                                },
+                                "args": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                },
+                                "variables": {
+                                    "type": "object",
+                                    "additionalProperties": true
+                                }
                             },
-                            "variables": {
-                                "type": "object",
-                                "description": "Variables to pass to the plugin"
-                            }
+                            "allOf": [
+                                {
+                                    "if": {
+                                        "properties": {
+                                            "source": {
+                                                "const": "local"
+                                            }
+                                        }
+                                    },
+                                    "then": {
+                                        "required": [
+                                            "path"
+                                        ],
+                                        "properties": {
+                                            "url": {
+                                                "enum": [
+                                                    null
+                                                ]
+                                            },
+                                            "version": {
+                                                "enum": [
+                                                    null
+                                                ]
+                                            },
+                                            "branch": {
+                                                "enum": [
+                                                    null
+                                                ]
+                                            }
+                                        }
+                                    }
+                                },
+                                {
+                                    "if": {
+                                        "properties": {
+                                            "source": {
+                                                "const": "github"
+                                            }
+                                        }
+                                    },
+                                    "then": {
+                                        "required": [
+                                            "url"
+                                        ],
+                                        "oneOf": [
+                                            {
+                                                "required": [
+                                                    "version"
+                                                ],
+                                                "properties": {
+                                                    "branch": {
+                                                        "enum": [
+                                                            null
+                                                        ]
+                                                    }
+                                                }
+                                            },
+                                            {
+                                                "required": [
+                                                    "branch"
+                                                ],
+                                                "properties": {
+                                                    "version": {
+                                                        "enum": [
+                                                            null
+                                                        ]
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "if": {
+                                        "properties": {
+                                            "type": {
+                                                "const": "sk"
+                                            }
+                                        }
+                                    },
+                                    "then": {
+                                        "not": {
+                                            "anyOf": [
+                                                {
+                                                    "required": [
+                                                        "command"
+                                                    ]
+                                                },
+                                                {
+                                                    "required": [
+                                                        "args"
+                                                    ]
+                                                },
+                                                {
+                                                    "required": [
+                                                        "variables"
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                },
+                                {
+                                    "if": {
+                                        "properties": {
+                                            "type": {
+                                                "const": "mcp"
+                                            }
+                                        }
+                                    },
+                                    "then": {
+                                        "required": [
+                                            "command",
+                                            "args"
+                                        ],
+                                        "not": {
+                                            "required": [
+                                                "variables"
+                                            ]
+                                        }
+                                    }
+                                },
+                                {
+                                    "if": {
+                                        "properties": {
+                                            "type": {
+                                                "const": "agently"
+                                            }
+                                        }
+                                    },
+                                    "then": {
+                                        "not": {
+                                            "anyOf": [
+                                                {
+                                                    "required": [
+                                                        "command"
+                                                    ]
+                                                },
+                                                {
+                                                    "required": [
+                                                        "args"
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
-            }
-        },
-        "features": {
-            "type": "object",
-            "description": "Agent features configuration"
-        },
-        "env": {
-            "type": "object",
-            "description": "Environment variables for this agent",
-            "additionalProperties": {
-                "type": "string"
             }
         }
     }

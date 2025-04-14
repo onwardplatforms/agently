@@ -1,97 +1,116 @@
 {
   "agents": {
-    "researcher": {
+    "researcher2": {
       "name": "Research Agent",
-      "plugins": {
-        "sk": {
-          "local/hello": {
-            "namespace": "local",
-            "name": "hello",
-            "full_name": "hello",
-            "version": "local",
-            "source_type": "local",
-            "plugin_type": "sk",
-            "source_path": "/Users/justinoconnor/Code/onward/agently/examples/multi_agent/../hello_local/plugins/hello",
-            "sha": "b6e3352bef9fa28ef3c6c99e5a00d4da21bc3456c5c0857e7ee79074dd8a30bb",
-            "installed_at": "2025-04-12T18:38:08.901209",
-            "variables": {
-              "default_name": "Researcher"
-            }
+      "plugins": [
+        {
+          "namespace": "local",
+          "name": "hello",
+          "full_name": "hello",
+          "version": "local",
+          "source_type": "local",
+          "plugin_type": "agently",
+          "source_path": "/Users/justinoconnor/Code/onward/agently/examples/multi_agent/../hello_local/plugins/hello",
+          "sha": "fabe9c4c188f8c9199fd2dee88c861ceaa7f4ccf95a1c9b3fe072f546d3e0b91",
+          "installed_at": "2025-04-14T05:02:47.186184",
+          "variables": {
+            "default_name": "Researcher"
           }
-        },
-        "mcp": {}
-      }
+        }
+      ]
     },
     "coder": {
       "name": "Coding Agent",
-      "plugins": {
-        "sk": {
-          "local/coder": {
-            "namespace": "local",
-            "name": "coder",
-            "full_name": "coder",
-            "version": "local",
-            "source_type": "local",
-            "plugin_type": "sk",
-            "source_path": "/Users/justinoconnor/Code/onward/agently/examples/multi_agent/../coder_agent/plugins/coder",
-            "sha": "34bbbb2de188c425513af4943b1387ef388a9ead282915322b15f8107095dd3f",
-            "installed_at": "2025-04-12T18:38:08.903918"
-          }
-        },
-        "mcp": {}
-      }
+      "plugins": [
+        {
+          "namespace": "local",
+          "name": "coder",
+          "full_name": "coder",
+          "version": "local",
+          "source_type": "local",
+          "plugin_type": "sk",
+          "source_path": "/Users/justinoconnor/Code/onward/agently/examples/multi_agent/../coder_agent/plugins/coder",
+          "sha": "34bbbb2de188c425513af4943b1387ef388a9ead282915322b15f8107095dd3f",
+          "installed_at": "2025-04-14T05:02:47.189033"
+        }
+      ]
     },
     "creative": {
       "name": "Creative Agent",
-      "plugins": {
-        "sk": {
-          "local/hello": {
-            "namespace": "local",
-            "name": "hello",
-            "full_name": "hello",
-            "version": "local",
-            "source_type": "local",
-            "plugin_type": "sk",
-            "source_path": "/Users/justinoconnor/Code/onward/agently/examples/multi_agent/../hello_local/plugins/hello",
-            "sha": "b6e3352bef9fa28ef3c6c99e5a00d4da21bc3456c5c0857e7ee79074dd8a30bb",
-            "installed_at": "2025-04-12T18:38:08.904583",
-            "variables": {
-              "default_name": "Creative"
-            }
+      "plugins": [
+        {
+          "namespace": "local",
+          "name": "hello",
+          "full_name": "hello",
+          "version": "local",
+          "source_type": "local",
+          "plugin_type": "agently",
+          "source_path": "/Users/justinoconnor/Code/onward/agently/examples/multi_agent/../hello_local/plugins/hello",
+          "sha": "fabe9c4c188f8c9199fd2dee88c861ceaa7f4ccf95a1c9b3fe072f546d3e0b91",
+          "installed_at": "2025-04-14T05:02:47.189621",
+          "variables": {
+            "default_name": "Creative"
+          }
+        }
+      ]
+    },
+    "devops": {
+      "name": "DevOps Agent",
+      "plugins": [
+        {
+          "namespace": "local",
+          "name": "hello",
+          "full_name": "hello",
+          "version": "local",
+          "source_type": "local",
+          "plugin_type": "agently",
+          "source_path": "/Users/justinoconnor/Code/onward/agently/examples/multi_agent/../hello_local/plugins/hello",
+          "sha": "fabe9c4c188f8c9199fd2dee88c861ceaa7f4ccf95a1c9b3fe072f546d3e0b91",
+          "installed_at": "2025-04-14T05:02:47.190160",
+          "variables": {
+            "default_name": "DevOps"
+          }
+        }
+      ]
+    },
+    "mcp-agent": {
+      "name": "MCP Example Agent",
+      "plugins": [
+        {
+          "namespace": "modelcontextprotocol",
+          "name": "servers",
+          "full_name": "modelcontextprotocol/servers",
+          "version": "2025.4.8",
+          "source_type": "github",
+          "plugin_type": "mcp",
+          "repo_url": "github.com/modelcontextprotocol/servers",
+          "plugin_path": "",
+          "sha": "73869dd6dc4ff3ffa4b79e12ad6c8ad619ba3a96",
+          "installed_at": "2025-04-14T05:02:47.389388",
+          "mcp_details": {
+            "command": "uvx",
+            "args": [
+              "mcp-server-git",
+              "--repository",
+              "/Users/justinoconnor/Code/onward/agently"
+            ]
           }
         },
-        "mcp": {}
-      }
-    }
-  },
-  "plugins": {
-    "sk": {
-      "local/hello": {
-        "namespace": "local",
-        "name": "hello",
-        "full_name": "hello",
-        "version": "local",
-        "source_type": "local",
-        "plugin_type": "sk",
-        "source_path": "/Users/justinoconnor/Code/onward/agently/examples/multi_agent/../hello_local/plugins/hello",
-        "sha": "b6e3352bef9fa28ef3c6c99e5a00d4da21bc3456c5c0857e7ee79074dd8a30bb",
-        "installed_at": "2025-04-12T18:38:08.904583",
-        "variables": {
-          "default_name": "Creative"
+        {
+          "namespace": "local",
+          "name": "hello",
+          "full_name": "hello",
+          "version": "local",
+          "source_type": "local",
+          "plugin_type": "agently",
+          "source_path": "/Users/justinoconnor/Code/onward/agently/examples/multi_agent/../hello_local/plugins/hello",
+          "sha": "fabe9c4c188f8c9199fd2dee88c861ceaa7f4ccf95a1c9b3fe072f546d3e0b91",
+          "installed_at": "2025-04-14T05:02:47.390756",
+          "variables": {
+            "default_name": "DevOps"
+          }
         }
-      },
-      "local/coder": {
-        "namespace": "local",
-        "name": "coder",
-        "full_name": "coder",
-        "version": "local",
-        "source_type": "local",
-        "plugin_type": "sk",
-        "source_path": "/Users/justinoconnor/Code/onward/agently/examples/multi_agent/../coder_agent/plugins/coder",
-        "sha": "34bbbb2de188c425513af4943b1387ef388a9ead282915322b15f8107095dd3f",
-        "installed_at": "2025-04-12T18:38:08.903918"
-      }
-    },
-    "mcp": {}
+      ]
+    }
   }
 }

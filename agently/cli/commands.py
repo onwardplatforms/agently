@@ -1,191 +1,28 @@
-"""Command line interface for the agent runtime."""
+"""Command line interface for the Agently framework.
+
+This module defines the CLI commands and subcommands using Click.
+"""
 
 import json
 import logging
 import os
+import subprocess
 import sys
-from datetime import datetime
-from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Optional
-from uuid import uuid4
+from typing import Any, Dict, List, Optional, Union
 
 import click
 import yaml
-from agently_sdk import styles  # Import styles directly from SDK
 
-from agently.config.parser import find_config_file, get_all_agents, load_agent_config
-from agently.plugins.sources import GitHubPluginSource, LocalPluginSource
 from agently.utils.logging import LogLevel, configure_logging
 from agently.version import __version__
 
-from .interactive import interactive_loop
-
+# Create a logger for this module
 logger = logging.getLogger(__name__)
 
-
-# Define pass decorators for Click
-def pass_client(f):
-    """Decorator to pass a client to a command."""
-
-    def wrapper(*args, **kwargs):
-        # For now, just pass through
-        return f(*args, **kwargs)
-
-    return wrapper
-
-
-def pass_config(f):
-    """Decorator to pass a config to a command."""
-
-    def wrapper(*args, **kwargs):
-        # For now, just pass through
-        return f(*args, **kwargs)
-
-    return wrapper
-
-
-# Define client and config classes
-class Client:
-    """Client for interacting with the agent."""
-
-    def __init__(self):
-        pass
-
-
-class Config:
-    """Configuration for the agent."""
-
-    def __init__(self):
-        self.agent_config_file = None
-
-    def get_agent_config_file(self):
-        """Get the agent configuration file path."""
-        return self.agent_config_file
-
-
-# Define plugin status enum directly here
-class PluginStatus(Enum):
-    """Status of a plugin during initialization."""
-
-    ADDED = "added"
-    UPDATED = "updated"
-    UNCHANGED = "unchanged"
-    REMOVED = "removed"
-    FAILED = "failed"
-
-
-# Define the formatters directly here using SDK styles
-def format_plugin_status(
-    status: PluginStatus, plugin_key: str, details: Optional[str] = None, plugin_type: str = "sk"
-) -> str:
-    """Format a plugin status message.
-
-    Args:
-        status: Status of the plugin
-        plugin_key: Plugin key (namespace/name)
-        details: Additional details about the plugin
-        plugin_type: Type of plugin (sk or mcp)
-
-    Returns:
-        Formatted status message
-    """
-    # Color-coded status indicators
-    status_icons = {
-        PluginStatus.ADDED: styles.green("+ "),
-        PluginStatus.UPDATED: styles.yellow("↻ "),
-        PluginStatus.UNCHANGED: styles.dim("· "),
-        PluginStatus.REMOVED: styles.red("- "),
-        PluginStatus.FAILED: styles.red("✗ "),
-    }
-
-    # Extract version from details if available
-    version = "latest"
-    if details:
-        if details.startswith("version="):
-            version = details.split("=")[1]
-        elif details.startswith("path="):
-            version = "local"
-
-    # Format output with name, version, and type
-    output = f"{status_icons.get(status, '')}{plugin_key} {styles.dim(version)} {styles.dim(f'({plugin_type.upper()})')}"
-
-    return output
-
-
-def format_section_header(title: str) -> str:
-    """Format a section header."""
-    return f"{styles.bold(title)}"
-
-
-def format_plan_summary(added: int, updated: int, unchanged: int, removed: int) -> str:
-    """Format a summary of the plugin plan.
-
-    Args:
-        added: Number of plugins to add
-        updated: Number of plugins to update
-        unchanged: Number of plugins that are unchanged
-        removed: Number of plugins to remove
-
-    Returns:
-        Formatted summary
-    """
-    total = added + updated + unchanged + removed
-
-    if total == 0:
-        return "No plugins found"
-
-    # If no changes, just report the unchanged count
-    if added == 0 and updated == 0 and removed == 0:
-        return f"{styles.dim(f'• {total} plugins')} (no changes)"
-
-    # Create a list of changes
-    changes = []
-    if added > 0:
-        changes.append(f"{styles.green(f'+{added}')}")
-    if updated > 0:
-        changes.append(f"{styles.yellow(f'~{updated}')}")
-    if removed > 0:
-        changes.append(f"{styles.red(f'-{removed}')}")
-
-    # Format the output like Terraform does
-    return f"{styles.bold(f'• {total} plugins')} ({' '.join(changes)})"
-
-
-def format_apply_summary(
-    added: int, updated: int, unchanged: int, removed: int, failed: int = 0, prefix: str = "agents"
-) -> str:
-    """Format a validation result summary.
-
-    Args:
-        added: Number of items added
-        updated: Number of items updated
-        unchanged: Number of unchanged items
-        removed: Number of items removed
-        failed: Number of failed items
-        prefix: The type of item (plugins or MCP servers)
-    """
-    added + updated + unchanged + removed
-
-    # Special case for all items up-to-date
-    if added == 0 and updated == 0 and removed == 0 and failed == 0 and unchanged > 0:
-        return f"{styles.green('✓')} {unchanged} {prefix} ready"
-
-    parts = []
-
-    if added > 0:
-        parts.append(f"{styles.green(f'+{added}')} added")
-    if updated > 0:
-        parts.append(f"{styles.yellow(f'~{updated}')} updated")
-    if unchanged > 0:
-        parts.append(f"{unchanged} unchanged")
-    if removed > 0:
-        parts.append(f"{styles.red(f'-{removed}')} removed")
-    if failed > 0:
-        parts.append(f"{styles.red(f'!{failed}')} failed")
-
-    # Format in a compact way
-    return f"{styles.green('✓')} {' · '.join(parts)}"
+# Import our new modules
+from agently.cli import config, formatting, lockfile, plugin_manager
+from agently.cli.interactive import interactive_loop
 
 
 @click.group()
@@ -193,6 +30,11 @@ def cli():
     """agently.run - Declarative AI agents without code."""
     # Default to no logging unless explicitly requested
     configure_logging(level=LogLevel.NONE)
+
+
+# ------------------------------------------------------------------------------
+# INITIALIZE COMMAND
+# ------------------------------------------------------------------------------
 
 
 @cli.command(help="Initialize agent and dependencies")
@@ -203,58 +45,390 @@ def cli():
     help="Set the logging level. Overrides the LOG_LEVEL environment variable.",
 )
 @click.option(
-    "--file", "-f",
+    "--file",
+    "-f",
     help="Path to agent configuration file",
 )
-def init(agent_id, log_level, file):
-    """Initialize agent and dependencies."""
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Force reinstallation of all plugins",
+)
+@click.option(
+    "--quiet",
+    is_flag=True,
+    help="Reduce output verbosity",
+)
+def init(agent_id=None, log_level=None, file=None, force=False, quiet=False):
+    """Initialize agents and dependencies."""
     # Configure logging if specified via CLI
     if log_level:
         level = getattr(LogLevel, log_level.upper())
         configure_logging(level=level)
+    else:
+        configure_logging(level=LogLevel.NONE)
 
     try:
-        # Find configuration file
-        config_file = find_config_file(file)
+        # Find and validate the configuration file
+        config_file = config.find_config_file(file)
         if not config_file:
-            click.echo("Error: No configuration file found")
+            click.echo(formatting.format_error("No configuration file found"))
             sys.exit(1)
 
-        click.echo("Initializing Agently...")
+        click.echo("Initializing agently...")
         click.echo()
 
-        # First step: Validate configuration
-        click.echo("Validating agent configuration...")
-        # Just loading the config validates it
-        config = yaml.safe_load(open(config_file, "r"))
-        if "agents" in config and config["agents"]:
-            num_agents = len(config["agents"])
-            click.echo(f"{styles.green('✓')} Configuration validated ({num_agents} agents defined)")
-        else:
-            click.echo(f"{styles.green('✓')} Configuration validated (single agent)")
+        # Load the configuration
+        try:
+            cfg = config.load_config(config_file)
+        except Exception as e:
+            click.echo(formatting.format_error(f"Failed to load configuration: {str(e)}"))
+            sys.exit(1)
+
+        # Get all agent IDs from the config
+        agent_ids = []
+        if "agents" in cfg:
+            agents_list = cfg["agents"]
+            if type(agents_list).__name__ == "list":
+                for idx, agent in enumerate(agents_list):
+                    if type(agent).__name__ == "dict":
+                        agent_id_val = agent.get("id") or f"agent{idx+1}"
+                        agent_ids.append(agent_id_val)
+
+        agent_count = len(agent_ids)
+        click.echo(formatting.format_success(f"  {agent_count} agents detected"))
+
+        # Validate the configuration
+        is_valid, errors = _validate_config_with_schema(cfg, Path(__file__).parent.parent / "config" / "schema.json")
+        if not is_valid:
+            click.echo(formatting.format_error("Configuration validation failed:"))
+            _display_validation_errors(errors, config_file)
+            sys.exit(1)
+
+        click.echo(formatting.format_success("  configuration valid"))
         click.echo()
 
-        # Second step: Initialize plugins
-        click.echo("Initializing plugins...")
-        
-        # Initialize plugins and MCP servers
-        stats = _initialize_plugins(config_file, agent_id=agent_id)
+        # Load the lockfile
+        lock_data = lockfile.load_lockfile()
 
-        # Final success message
+        # Clean up agents that are no longer in the config
+        config_agent_ids = set(agent_ids)  # Convert to set for efficient membership testing
+        lockfile.cleanup_agents(lock_data, config_agent_ids, quiet)
+
+        click.echo("Setting up agents...")
+
+        # Get initial state of plugins in the lockfile
+        old_lock_data = {}
+        if "agents" in lock_data:
+            for agent_id_key, agent_data in lock_data.get("agents", {}).items():
+                if "plugins" in agent_data:
+                    old_lock_data[agent_id_key] = {
+                        "plugins": [p.copy() if isinstance(p, dict) else p for p in agent_data.get("plugins", [])]
+                    }
+
+        # Run the plugin initialization with quiet=True to suppress built-in output
+        stats = plugin_manager.sync_plugins(config_file, cfg, lock_data, agent_id, True, force)
+
+        # Save the updated lockfile
+        lockfile.save_lockfile(lock_data)
+
+        # Display agent info with plugin status
+        for idx, agent_config in enumerate(cfg.get("agents", [])):
+            if type(agent_config).__name__ != "dict":
+                continue
+
+            current_agent_id = agent_config.get("id") or f"agent{idx+1}"
+            agent_name = agent_config.get("name", f"Agent {idx+1}")
+            agent_desc = agent_config.get("description", "")
+
+            # Show a summary of the agent (truncate description if too long)
+            desc_preview = agent_desc[:50] + "..." if len(agent_desc) > 50 else agent_desc
+            click.echo(f"{agent_name} ({current_agent_id}): {desc_preview}")
+
+            # Display plugin information for this agent with status
+            old_agent_data = old_lock_data.get(current_agent_id, {})
+            _display_agent_plugins(cfg, current_agent_id, lock_data, old_agent_data)
+
+        # Show success message
         click.echo()
-        click.echo(f"{styles.green('Agently has been successfully initialized!')}")
+        click.echo(formatting.format_success("Agently has been successfully initialized!"))
         click.echo()
-        
+
         if agent_id:
             click.echo(f"You can now run the agent with: agently run {agent_id}")
         else:
             click.echo("You can now run Agently with: agently run")
-            click.echo("To list available agents, use: agently list agents")
-        
+
+        # Don't exit with error code for plugin failures
+        # We've already shown failed plugins in the output
+
     except Exception as e:
-        click.echo(f"{styles.red('Error:')} {str(e)}")
+        click.echo(formatting.format_error(f"Initialization error: {str(e)}"))
         logger.exception("Error during initialization")
         sys.exit(1)
+
+
+def _display_agent_plugins(cfg, agent_id, lock_data, old_agent_data=None):
+    """Display information about plugins for an agent.
+
+    Args:
+        cfg: Configuration object
+        agent_id: ID of the agent
+        lock_data: The lockfile data
+        old_agent_data: Previous state of the agent in the lockfile
+    """
+    # Find the agent in the config
+    agent_config = None
+    for idx, agent in enumerate(cfg.get("agents", [])):
+        if type(agent).__name__ != "dict":
+            continue
+
+        current_id = agent.get("id") or f"agent{idx+1}"
+        if current_id == agent_id:
+            agent_config = agent
+            break
+
+    if not agent_config:
+        return
+
+    # Process plugins for this agent
+    plugins = agent_config.get("plugins", [])
+    if not plugins:
+        click.echo("  no plugins configured")
+        return
+
+    # Get the agent from lockfile
+    agent_lock_data = None
+    if "agents" in lock_data and agent_id in lock_data["agents"]:
+        agent_lock_data = lock_data["agents"][agent_id]
+
+    # Get old plugin data
+    old_plugins = []
+    if old_agent_data and "plugins" in old_agent_data:
+        old_plugins = old_agent_data.get("plugins", [])
+
+    for plugin_config in plugins:
+        if type(plugin_config).__name__ != "dict":
+            continue
+
+        # Get plugin details
+        plugin_type = plugin_config.get("type", "unknown")
+        plugin_source = plugin_config.get("source", "unknown")
+
+        # Get source-specific details
+        plugin_location = ""
+        if plugin_source == "local":
+            plugin_path = plugin_config.get("path", "")
+            if plugin_path:
+                plugin_location = f"@ {plugin_path}"
+        elif plugin_source == "github":
+            plugin_url = plugin_config.get("url", "")
+            if plugin_url:
+                plugin_location = f"@ {plugin_url}"
+                plugin_branch = plugin_config.get("branch")
+                plugin_version = plugin_config.get("version")
+                if plugin_branch:
+                    plugin_location += f" ({plugin_branch})"
+                elif plugin_version:
+                    plugin_location += f" (v{plugin_version})"
+
+        # Find matching plugin in current lockfile
+        current_plugin = None
+        if agent_lock_data and "plugins" in agent_lock_data:
+            for p in agent_lock_data.get("plugins", []):
+                # Match based on type, namespace/source, and path/url
+                if (
+                    p.get("plugin_type") == plugin_type
+                    and _plugin_source_matches(p, plugin_source)
+                    and _plugin_path_matches(p, plugin_config)
+                ):
+                    current_plugin = p
+                    break
+
+        # Find matching plugin in old lockfile
+        old_plugin = None
+        for p in old_plugins:
+            # Match based on type, namespace/source, and path/url
+            if (
+                p.get("plugin_type") == plugin_type
+                and _plugin_source_matches(p, plugin_source)
+                and _plugin_path_matches(p, plugin_config)
+            ):
+                old_plugin = p
+                break
+
+        # Determine real plugin status
+        status_text = "is up-to-date"
+        status_style = formatting.styles.dim
+
+        if not old_plugin and current_plugin:
+            # Plugin wasn't in old lockfile but is in current: added
+            status_text = "was added"
+            status_style = formatting.styles.green
+        elif old_plugin and current_plugin:
+            # Plugin was in old lockfile and is in current: check if updated
+            old_sha = old_plugin.get("sha", "")
+            current_sha = current_plugin.get("sha", "")
+            if old_sha != current_sha:
+                status_text = "was updated"
+                status_style = formatting.styles.yellow
+        elif not current_plugin:
+            # Plugin is in config but not in lockfile: failed
+            status_text = "failed to initialize"
+            status_style = formatting.styles.red
+
+        # Display the plugin with status - ensure base text is plain, path is dimmed
+        plugin_text = f"{plugin_source}/{plugin_type}"
+        path_text = formatting.styles.dim(plugin_location)
+        click.echo(f"  {plugin_text} {path_text} {status_style(status_text)}")
+
+
+def _plugin_source_matches(lock_plugin, source):
+    """Check if the plugin source in lockfile matches the source in config."""
+    namespace = lock_plugin.get("namespace", "")
+    source_type = lock_plugin.get("source_type", "")
+
+    # Local plugin with namespace "local" matches source "local"
+    if namespace == "local" and source == "local":
+        return True
+
+    # GitHub plugins can have different namespaces (user or org names)
+    # but they all have source_type "github" in the lockfile
+    if source_type == "github" and source == "github":
+        return True
+
+    return False
+
+
+def _plugin_path_matches(lock_plugin, plugin_config):
+    """Check if the plugin path in lockfile matches the one in config."""
+    # For local plugins, compare the basename of the path
+    if "path" in plugin_config:
+        lock_name = lock_plugin.get("name", "")
+        path = plugin_config["path"]
+        return lock_name == os.path.basename(path)
+
+    # For GitHub plugins, check if the URL matches
+    if "url" in plugin_config:
+        url = plugin_config["url"]
+        repo_url = lock_plugin.get("repo_url", "")
+
+        # Clean up the URLs for comparison
+        clean_url = url.replace("github.com/", "").strip("/")
+        clean_repo_url = repo_url.replace("github.com/", "").strip("/")
+
+        # Compare the URLs directly (namespace/repo format)
+        if clean_url == clean_repo_url:
+            return True
+
+        # If they don't match directly, check if the repo name matches
+        # This handles the case where the URL format might differ but repo is the same
+        lock_name = lock_plugin.get("name", "")
+        url_parts = clean_url.split("/")
+        if len(url_parts) > 1 and url_parts[-1] == lock_name:
+            return True
+
+    return False
+
+
+# ------------------------------------------------------------------------------
+# VALIDATE COMMAND
+# ------------------------------------------------------------------------------
+
+
+@cli.command(help="Validate agent configuration")
+@click.option(
+    "--log-level",
+    type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL", "NONE"], case_sensitive=False),
+    help="Set the logging level. Overrides the LOG_LEVEL environment variable.",
+)
+@click.option(
+    "--file",
+    "-f",
+    help="Path to agent configuration file",
+)
+@click.option(
+    "--strict",
+    is_flag=True,
+    help="Exit with error code on validation failures",
+)
+def validate(log_level, file, strict=False):
+    """Validate agent configuration without initializing."""
+    # Configure logging if specified via CLI
+    level = getattr(LogLevel, (log_level or "NONE").upper())
+    configure_logging(level=level)
+
+    has_errors = False
+    try:
+        # Find configuration file
+        config_file = config.find_config_file(file)
+        if not config_file:
+            click.echo(formatting.format_error("No configuration file found"))
+            sys.exit(1)
+
+        click.echo(f"Validating configuration: {config_file}")
+        click.echo()
+
+        # Load the config first
+        try:
+            cfg = config.load_config(config_file)
+            logger.debug(f"Loaded configuration: {cfg}")
+        except Exception as e:
+            click.echo(formatting.format_error(f"Failed to load configuration: {str(e)}"))
+            sys.exit(1)
+
+        # Try validating with json schema
+        schema_path = Path(__file__).parent.parent / "config" / "schema.json"
+        logger.debug(f"Schema path: {schema_path}")
+
+        try:
+            logger.debug("Validating with schema...")
+            is_valid, errors = _validate_config_with_schema(cfg, schema_path)
+            logger.debug(f"Validation result: valid={is_valid}, errors={errors}")
+
+            if not is_valid:
+                _display_validation_errors(errors, config_file)
+                has_errors = True
+
+            # Additional validation with our custom validator
+            if not config.validate_config(cfg):
+                if not has_errors:
+                    click.echo(formatting.format_error("Configuration validation failed"))
+                has_errors = True
+
+            if not has_errors:
+                # Success message for validation
+                agent_count = ""
+                if "agents" in cfg and cfg["agents"]:
+                    num_agents = len(cfg["agents"])
+                    agent_count = f" ({num_agents} agents defined)"
+
+                click.echo(formatting.format_success(f"Success! The configuration is valid{agent_count}."))
+            elif not strict:
+                # Don't show warning or info - just continue without exit code
+                pass
+            else:
+                # In strict mode, exit with error code
+                sys.exit(1)
+
+        except Exception as e:
+            logger.exception("Error during schema validation")
+            click.echo(formatting.format_error(f"Validation error: {str(e)}"))
+            sys.exit(1)
+
+    except Exception as e:
+        logger.exception("Error during validation")
+        click.echo(formatting.format_error(str(e)))
+        sys.exit(1)
+
+    # Only exit with error in strict mode
+    if has_errors and strict:
+        sys.exit(1)
+
+
+# ------------------------------------------------------------------------------
+# RUN COMMAND
+# ------------------------------------------------------------------------------
 
 
 @cli.command(help="Run agent in REPL mode")
@@ -265,7 +439,8 @@ def init(agent_id, log_level, file):
     help="Set the logging level. Overrides the LOG_LEVEL environment variable.",
 )
 @click.option(
-    "--file", "-f",
+    "--file",
+    "-f",
     help="Path to agent configuration file",
 )
 @click.option(
@@ -282,64 +457,61 @@ def run(agent_id, log_level, file, force):
 
     try:
         # Find configuration file
-        config_file = find_config_file(file)
+        config_file = config.find_config_file(file)
         if not config_file:
-            click.echo("Error: No configuration file found")
+            click.echo(formatting.format_error("No configuration file found"))
             sys.exit(1)
 
         # Load specific agent or first agent
-        config = load_agent_config(config_file, agent_id)
-        
+        agent_config = config.load_agent_config(config_file, agent_id)
+
         # Verify agent is initialized unless --force is used
         if not force:
-            # Check lockfile for agent initialization
-            lockfile_path = Path.cwd() / "agently.lockfile.json"
-            
-            if not lockfile_path.exists():
-                click.echo(f"{styles.yellow('Warning:')} Agent not initialized.")
-                click.echo(f"Please run '{styles.bold('agently init')}' first to ensure all dependencies are available.")
-                click.echo(f"Or use '{styles.bold('agently run --force')}' to skip this check.")
-                sys.exit(1)
-                
-            try:
-                with open(lockfile_path, "r") as f:
-                    lockfile = json.load(f)
-                    
-                agent_initialized = False
-                agent_id_to_check = config.id  # Get the ID from the loaded config
-                
-                # Check if agent exists in the lockfile
-                if "agents" in lockfile and agent_id_to_check in lockfile["agents"]:
-                    agent_data = lockfile["agents"][agent_id_to_check]
-                    # Check if the agent has plugins
-                    if agent_data.get("plugins"):
-                        agent_initialized = True
-                
-                if not agent_initialized:
-                    click.echo(f"{styles.yellow('Warning:')} Agent '{config.name}' ({agent_id_to_check}) is not initialized.")
-                    if agent_id:
-                        click.echo(f"Please run '{styles.bold(f'agently init {agent_id}')}' first to ensure all dependencies are available.")
-                    else:
-                        click.echo(f"Please run '{styles.bold('agently init')}' first to ensure all dependencies are available.")
-                    click.echo(f"Or use '{styles.bold('agently run --force')}' to skip this check.")
-                    sys.exit(1)
-            except (json.JSONDecodeError, IOError):
-                click.echo(f"{styles.yellow('Warning:')} Could not verify agent initialization status.")
-                click.echo(f"Please run '{styles.bold('agently init')}' to ensure all dependencies are available.")
-                click.echo(f"Or use '{styles.bold('agently run --force')}' to skip this check.")
+            lock = lockfile.load_lockfile()
+
+            if not lockfile.get_lockfile_path().exists():
+                click.echo(formatting.format_warning("Agent not initialized."))
+                click.echo(
+                    f"Please run '{click.style('agently init', bold=True)}' first to ensure all dependencies are available."
+                )
+                click.echo(f"Or use '{click.style('agently run --force', bold=True)}' to skip this check.")
                 sys.exit(1)
 
-        click.echo(f"Running agent: {config.name}")
+            agent_initialized = False
+            agent_id_to_check = agent_config.id  # ID from the loaded config
+
+            # Check if agent exists in the lockfile
+            agent_data = lockfile.get_agent_from_lockfile(lock, agent_id_to_check)
+            if agent_data and "plugins" in agent_data and agent_data["plugins"]:
+                agent_initialized = True
+
+            if not agent_initialized:
+                click.echo(
+                    formatting.format_warning(f"Agent '{agent_config.name}' ({agent_id_to_check}) is not initialized.")
+                )
+                if agent_id:
+                    click.echo(f"Please run '{click.style(f'agently init {agent_id}', bold=True)}' first.")
+                else:
+                    click.echo(f"Please run '{click.style('agently init', bold=True)}' first.")
+                click.echo(f"Or use '{click.style('agently run --force', bold=True)}' to skip this check.")
+                sys.exit(1)
+
+        click.echo(f"Running agent: {agent_config.name}")
 
         # Run interactive loop
-        interactive_loop(config)
+        interactive_loop(agent_config)
 
     except KeyboardInterrupt:
         click.echo("\nExiting...")
     except Exception as e:
-        click.echo(f"Error: {str(e)}")
+        click.echo(formatting.format_error(str(e)))
         logger.exception("Error running agent")
         sys.exit(1)
+
+
+# ------------------------------------------------------------------------------
+# LIST COMMAND GROUP
+# ------------------------------------------------------------------------------
 
 
 @cli.group(help="List resources")
@@ -351,20 +523,21 @@ def list():
 @list.command(name="agents", help="List configured agents")
 @click.argument("agent_id", required=False)
 @click.option(
-    "--file", "-f",
+    "--file",
+    "-f",
     help="Path to agent configuration file",
 )
 def list_agents(agent_id, file):
     """List all agents or detailed info for a specific agent."""
     try:
         # Find configuration file
-        config_file = find_config_file(file)
+        config_file = config.find_config_file(file)
         if not config_file:
-            click.echo("Error: No configuration file found")
+            click.echo(formatting.format_error("No configuration file found"))
             sys.exit(1)
 
         # Get all agents from config
-        agents = get_all_agents(config_file)
+        agents = config.get_all_agents(config_file)
 
         if not agent_id:
             # Summary view of all agents
@@ -372,53 +545,65 @@ def list_agents(agent_id, file):
             click.echo("-" * 60)
             for agent in agents:
                 click.echo(f"🤖 {agent['name']} ({agent['id']})")
-                if agent.get('description'):
+                if agent.get("description"):
                     click.echo(f"  Description: {agent['description']}")
                 click.echo(f"  Model: {agent['model']['provider']} {agent['model']['model']}")
-                plugin_count = len(agent.get('plugins', {}).get('local', [])) + len(agent.get('plugins', {}).get('github', []))
+                # Count plugins in the flat array
+                plugin_count = len(agent.get("plugins", []))
                 if plugin_count:
                     click.echo(f"  Plugins: {plugin_count}")
                 click.echo("-" * 60)
         else:
             # Detailed view of specific agent
-            agent = next((a for a in agents if a['id'] == agent_id), None)
+            agent = next((a for a in agents if a["id"] == agent_id), None)
             if not agent:
-                click.echo(f"Error: Agent with ID '{agent_id}' not found")
+                click.echo(formatting.format_error(f"Agent with ID '{agent_id}' not found"))
                 sys.exit(1)
-                
+
             click.echo(f"Agent: {agent['name']} ({agent['id']})")
             click.echo("=" * 60)
-            if agent.get('description'):
+            if agent.get("description"):
                 click.echo(f"Description: {agent['description']}")
             click.echo(f"Model: {agent['model']['provider']} {agent['model']['model']}")
-            
-            # Display system prompt snippet
-            if agent.get('system_prompt'):
-                prompt = agent['system_prompt']
+
+            # Display system prompt snippet if present
+            if agent.get("system_prompt"):
+                prompt = agent["system_prompt"]
                 click.echo(f"System prompt: {prompt[:100]}{'...' if len(prompt) > 100 else ''}")
-                
-            # Display plugins
-            local_plugins = agent.get('plugins', {}).get('local', [])
-            github_plugins = agent.get('plugins', {}).get('github', [])
-            
-            if local_plugins or github_plugins:
+
+            # Display features if present
+            if agent.get("features"):
+                click.echo("\nFeatures:")
+                features = agent["features"]
+                if features.get("deep_reasoning"):
+                    click.echo(f"  Deep reasoning: {features['deep_reasoning']}")
+
+            # Display plugins using the flat array structure
+            plugins = agent.get("plugins", [])
+
+            if plugins:
                 click.echo("\nPlugins:")
                 click.echo("-" * 60)
-                
-                for plugin in local_plugins:
-                    click.echo(f"📦 Local: {plugin['source']}")
-                    if plugin.get('type') == 'mcp':
-                        click.echo(f"  Type: MCP")
-                    
-                for plugin in github_plugins:
-                    click.echo(f"📦 GitHub: {plugin['source']} ({plugin['version']})")
-                    if plugin.get('type') == 'mcp':
-                        click.echo(f"  Type: MCP")
+
+                for plugin in plugins:
+                    source_type = plugin["source"]
+                    plugin_type = plugin["type"]
+
+                    if source_type == "local":
+                        click.echo(f"📦 Local: {plugin['path']} ({plugin_type.upper()})")
+                    elif source_type == "github":
+                        version = plugin.get("version", plugin.get("branch", "main"))
+                        click.echo(f"📦 GitHub: {plugin['url']} ({version}) ({plugin_type.upper()})")
 
     except Exception as e:
-        click.echo(f"Error: {e}")
+        click.echo(formatting.format_error(str(e)))
         logger.exception(f"Error listing agents: {e}")
         sys.exit(1)
+
+
+# ------------------------------------------------------------------------------
+# VERSION COMMAND
+# ------------------------------------------------------------------------------
 
 
 @cli.command()
@@ -427,374 +612,123 @@ def version():
     click.echo(f"Agently version {__version__}")
 
 
-def _initialize_plugins(config_path, quiet=False, force=False, agent_id=None):
-    """Initialize plugins and MCP servers based on a configuration file.
+def _validate_config_with_schema(cfg, schema_path):
+    """Validate configuration with JSON schema and return all errors found.
 
     Args:
-        config_path: Path to the agent configuration file
-        quiet: Whether to reduce output verbosity
-        force: Force reinstallation of all plugins and MCP servers
-        agent_id: Optional ID of specific agent to initialize
+        cfg: Configuration to validate
+        schema_path: Path to the schema file
 
     Returns:
-        Dict with plugin statistics
-
-    Raises:
-        FileNotFoundError: If the configuration file does not exist
+        Tuple of (is_valid, errors), where errors is a list of error dictionaries with helpful messages
     """
-    # Load the agent configuration
-    config_path = Path(config_path)
-    if not config_path.exists():
-        raise FileNotFoundError(f"Configuration file not found: {config_path}")
-
-    if force and not quiet:
-        click.echo("Force mode enabled: reinstalling all plugins")
-
-    # Parse YAML configuration to extract plugins
     try:
-        with open(config_path, "r") as f:
-            config = yaml.safe_load(f)
-    except yaml.YAMLError as e:
-        raise ValueError(f"Invalid YAML in configuration file: {e}")
+        import jsonschema
+        from jsonschema import validators
 
-    # Determine lockfile path (at the same level as .agently folder)
-    lockfile_path = Path.cwd() / "agently.lockfile.json"
+        with open(schema_path, "r") as f:
+            schema = json.load(f)
 
-    # Create empty lockfile if it doesn't exist or load existing one
-    if not lockfile_path.exists():
-        logger.info("Creating new lockfile")
-        lockfile = {
-            "agents": {},
-            "plugins": {"sk": {}, "mcp": {}}  # Keep the shared plugins section for backward compatibility
-        }
-    else:
-        # Load existing lockfile
-        with open(lockfile_path, "r") as f:
-            try:
-                lockfile = json.load(f)
-            except json.JSONDecodeError:
-                logger.error("Invalid lockfile, creating new one")
-                lockfile = {
-                    "agents": {},
-                    "plugins": {"sk": {}, "mcp": {}}
-                }
+        # Create a validator
+        validator_cls = validators.validator_for(schema)
+        validator = validator_cls(schema)
 
-        # Ensure lockfile has correct structure
-        if "agents" not in lockfile:
-            lockfile["agents"] = {}
-        if "plugins" not in lockfile:
-            lockfile["plugins"] = {"sk": {}, "mcp": {}}
-        elif "sk" not in lockfile["plugins"]:
-            lockfile["plugins"]["sk"] = {}
-        elif "mcp" not in lockfile["plugins"]:
-            lockfile["plugins"]["mcp"] = {}
+        # Collect all errors
+        all_errors = []
+        for error in validator.iter_errors(cfg):
+            # Format error path
+            error_path = ".".join(str(p) for p in error.path) if error.path else "root"
 
-    # Check if we have a multi-agent or single-agent config
-    if "agents" in config and config["agents"]:
-        # Multi-agent configuration
-        agents_to_process = []
-        
-        if agent_id:
-            # Find specific agent
-            agent = next((a for a in config["agents"] if a.get("id") == agent_id), None)
-            if not agent:
-                raise ValueError(f"Agent with ID '{agent_id}' not found in configuration")
-            
-            agents_to_process.append(agent)
-            if not quiet:
-                click.echo(f"Initializing plugins for agent: {agent.get('name')} ({agent_id})")
-        else:
-            # Initialize all agents
-            agents_to_process = config["agents"]
-            if not quiet:
-                click.echo(f"Initializing plugins for {len(agents_to_process)} agents")
-    else:
-        # Single-agent configuration - treat as one agent
-        if not quiet:
-            click.echo(f"Initializing plugins for agent: {config.get('name', 'default')}")
-        agents_to_process = [config]
-
-    # Stats counters
-    stats = {
-        "added": 0,
-        "updated": 0,
-        "unchanged": 0,
-        "removed": 0,
-        "failed": 0,
-    }
-
-    # Process each agent
-    for agent in agents_to_process:
-        agent_id = agent.get("id", f"agent-{uuid4().hex[:8]}")
-        agent_name = agent.get("name", "default")
-        
-        if not quiet:
-            click.echo(f"\nProcessing agent: {agent_name} ({agent_id})")
-        
-        # Ensure agent exists in lockfile
-        if agent_id not in lockfile["agents"]:
-            lockfile["agents"][agent_id] = {
-                "name": agent_name,
-                "plugins": {"sk": {}, "mcp": {}}
+            # Create a user-friendly error object
+            error_detail = {
+                "path": error_path,
+                "message": error.message,
+                "instance": repr(error.instance)[:100],  # Truncate long instances
             }
-        
-        # Get plugins for this agent
-        plugins_config = agent.get("plugins", {})
-        
-        # Process local plugins
-        local_plugins = plugins_config.get("local", [])
-        github_plugins = plugins_config.get("github", [])
-        
-        # Display plugin statuses in Terraform-like format
-        total_plugins = len(local_plugins) + len(github_plugins)
-        
-        if not quiet and total_plugins > 0:
-            click.echo(f"Found {total_plugins} plugins for agent {agent_name}")
-        
-        # Track which plugins are installed and which to remove
-        installed_plugins = {"sk": set(), "mcp": set()}
-        to_add = {"sk": set(), "mcp": set()}
-        to_update = {"sk": set(), "mcp": set()}
-        unchanged = {"sk": set(), "mcp": set()}
-        failed = {"sk": set(), "mcp": set()}
-        
-        # Process local plugins
-        for local_plugin_config in local_plugins:
-            source_path = local_plugin_config["source"]
-            plugin_type = local_plugin_config.get("type", "sk")  # Default to "sk" if not specified
-            
-            abs_source_path = config_path.parent / source_path if not os.path.isabs(source_path) else Path(source_path)
-            
-            # Use the same naming approach as during detection
-            plugin_name = os.path.basename(source_path)
-            local_source = LocalPluginSource(
-                path=abs_source_path,
-                namespace="local",
-                name=plugin_name,
-                force_reinstall=force,
-                plugin_type=plugin_type
-            )
-            
-            plugin_key = f"{local_source.namespace}/{local_source.name}"
-            
-            # Determine if plugin needs to be added/updated
-            agent_plugin_section = lockfile["agents"][agent_id]["plugins"][plugin_type]
-            if plugin_key in agent_plugin_section:
-                # Check if update needed
-                lockfile_sha = agent_plugin_section[plugin_key].get("sha", "")
-                if force or local_source.needs_update(lockfile_sha):
-                    to_update[plugin_type].add(plugin_key)
-                    if not quiet:
-                        click.echo(f"- Updating {plugin_key} from local path...")
-                else:
-                    unchanged[plugin_type].add(plugin_key)
-                    if not quiet:
-                        click.echo(f"- {plugin_key} is up to date")
-            else:
-                to_add[plugin_type].add(plugin_key)
-                if not quiet:
-                    click.echo(f"- Installing {plugin_key}...")
-            
-            try:
-                # Load plugin
-                plugin_class = local_source.load()
-                
-                # Get plugin info for lockfile
-                plugin_info = local_source._get_plugin_info(plugin_class)
-                
-                # Add variables from config if present
-                if "variables" in local_plugin_config:
-                    plugin_info["variables"] = local_plugin_config["variables"]
-                
-                # Add to installed plugins
-                installed_plugins[plugin_type].add(plugin_key)
-                
-                # Update lockfile with plugin info
-                lockfile["agents"][agent_id]["plugins"][plugin_type][plugin_key] = plugin_info
-                # Also update shared plugins (backward compatibility)
-                lockfile["plugins"][plugin_type][plugin_key] = plugin_info
-                
-                if plugin_key in to_add[plugin_type]:
-                    stats["added"] += 1
-                elif plugin_key in to_update[plugin_type]:
-                    stats["updated"] += 1
-                else:
-                    stats["unchanged"] += 1
-                
-            except Exception as e:
-                logger.error(f"Failed to install local plugin {source_path}: {e}")
-                failed[plugin_type].add(plugin_key)
-                stats["failed"] += 1
-                if not quiet:
-                    click.echo(f"{styles.red('✗')} Failed to install {plugin_key}: {e}")
-        
-        # Process GitHub plugins
-        for github_plugin_config in github_plugins:
-            repo_url = github_plugin_config["source"]
-            version = github_plugin_config.get("version", "main")
-            plugin_type = github_plugin_config.get("type", "sk")  # Default to "sk" if not specified
-            
-            # Create a GitHubPluginSource
-            source = GitHubPluginSource(
-                repo_url=repo_url,
-                plugin_path=github_plugin_config.get("plugin_path", ""),
-                namespace="",  # Will be extracted from repo_url
-                name="",  # Will be extracted from repo_url
-                version=version,
-                force_reinstall=False,
-                plugin_type=plugin_type
-            )
-            
-            plugin_key = f"{source.namespace}/{source.name}"
-            
-            # Determine if plugin needs to be added/updated
-            agent_plugin_section = lockfile["agents"][agent_id]["plugins"][plugin_type]
-            if plugin_key in agent_plugin_section:
-                # Check if update needed
-                lockfile_sha = agent_plugin_section[plugin_key].get("sha", "")
-                if force or source.needs_update(lockfile_sha):
-                    to_update[plugin_type].add(plugin_key)
-                    if not quiet:
-                        click.echo(f"- Updating {plugin_key} to {version}...")
-                else:
-                    unchanged[plugin_type].add(plugin_key)
-                    if not quiet:
-                        click.echo(f"- {plugin_key} is up to date")
-            else:
-                to_add[plugin_type].add(plugin_key)
-                if not quiet:
-                    click.echo(f"- Installing {plugin_key} {version}...")
-            
-            try:
-                # Load plugin
-                plugin_class = source.load()
-                
-                # Get plugin info for lockfile
-                plugin_info = source._get_plugin_info(plugin_class)
-                
-                # Add variables from config if present
-                if "variables" in github_plugin_config:
-                    plugin_info["variables"] = github_plugin_config["variables"]
-                
-                # Add to installed plugins
-                installed_plugins[plugin_type].add(plugin_key)
-                
-                # Update lockfile with plugin info
-                lockfile["agents"][agent_id]["plugins"][plugin_type][plugin_key] = plugin_info
-                # Also update shared plugins (backward compatibility)
-                lockfile["plugins"][plugin_type][plugin_key] = plugin_info
-                
-                if plugin_key in to_add[plugin_type]:
-                    stats["added"] += 1
-                elif plugin_key in to_update[plugin_type]:
-                    stats["updated"] += 1
-                else:
-                    stats["unchanged"] += 1
-                
-            except Exception as e:
-                logger.error(f"Failed to install GitHub plugin {repo_url}: {e}")
-                failed[plugin_type].add(plugin_key)
-                stats["failed"] += 1
-                if not quiet:
-                    click.echo(f"{styles.red('✗')} Failed to install {plugin_key}: {e}")
-        
-        # Remove plugins that are no longer in the config for this agent
-        for plugin_type in ["sk", "mcp"]:
-            agent_plugin_section = lockfile["agents"][agent_id]["plugins"][plugin_type]
-            current_plugins = set(agent_plugin_section.keys())
-            config_plugins = installed_plugins[plugin_type]
-            
-            for plugin_key in current_plugins - config_plugins:
-                agent_plugin_section.pop(plugin_key, None)
-                if not quiet:
-                    click.echo(f"- Removing {plugin_key}...")
-                stats["removed"] += 1
-    
-    # Write updated lockfile
-    with open(lockfile_path, "w") as f:
-        json.dump(lockfile, f, indent=2)
-    
-    # Display summary
-    if not quiet:
-        click.echo("\nAgent initialization summary:")
-        click.echo(format_apply_summary(
-            stats["added"],
-            stats["updated"],
-            stats["unchanged"],
-            stats["removed"],
-            stats["failed"]
-        ))
-    
-    return stats
+
+            all_errors.append(error_detail)
+
+        if not all_errors:
+            return True, []
+
+        return False, all_errors
+
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Schema validation error: {e}")
+        logger.error(traceback.format_exc())
+        return False, [{"path": "schema", "message": str(e)}]
 
 
-def interactive_loop_with_reasoning(agent, config, context):
-    """Run the interactive agent loop with continuous reasoning enabled.
+def _display_validation_errors(errors, config_file=None):
+    """Display formatted validation errors to the user.
 
     Args:
-        agent: The Agent instance
-        config: The agent configuration
-        context: The conversation context
+        errors: List of error details from _validate_config_with_schema
+        config_file: Path to the configuration file for context
     """
-    try:
-        import asyncio
+    file_name = config_file.name if config_file else "configuration file"
 
-        logger.info("Starting interactive loop with reasoning")
+    for error in errors:
+        try:
+            path = error.get("path", "")
+            message = error.get("message", "Unknown error")
 
-        # Display welcome message
-        provider = config.model.provider if hasattr(config.model, "provider") else "unknown"
-        model_name = config.model.model if hasattr(config.model, "model") else str(config.model)
+            # Determine the error type
+            error_type = "Validation error"
+            if "is a required property" in message:
+                error_type = "Missing required property"
+                required_prop = message.split("'")[1]
+            elif "anyOf" in message or "oneOf" in message:
+                error_type = "Invalid configuration"
 
-        click.echo(f"\nThe agent {config.name} has been initialized using {provider} {model_name}")
-        if config.description:
-            click.echo(config.description)
+            # Output the error with location context
+            location = f"in {file_name}"
+            if path and path != "root":
+                location += f" in {path}"
 
-        click.echo("\nType a message to begin. Type exit to quit.\n")
+            click.echo(formatting.format_error(f"{error_type} {location}:"))
+            click.echo()
 
-        # Main interaction loop
-        while True:
-            try:
-                # Get user input
-                user_input = click.prompt("You", prompt_suffix="> ")
-                logger.debug(f"User input: {user_input}")
+            # Format specific error messages
+            if "is a required property" in message:
+                required_prop = message.split("'")[1]
+                click.echo(f'The property "{required_prop}" is required but was not found.')
 
-                # Check for exit
-                if user_input.lower() in ["exit", "quit"]:
-                    logger.info("User requested exit")
-                    break
+                # Add specific guidance based on the property
+                if required_prop == "model":
+                    click.echo()
+                    click.echo("The 'model' property must be an object with 'provider' and 'model' fields. Example:")
+                    click.echo()
+                    click.echo("  model:")
+                    click.echo('    provider: "openai"')
+                    click.echo('    model: "gpt-4o"')
+                elif required_prop == "type" and "plugins" in path:
+                    click.echo()
+                    click.echo("Each plugin must have a 'type' field with one of these values: 'sk', 'mcp', or 'agently'")
+            elif "anyOf" in message or "oneOf" in message:
+                # Complex constraint errors
+                if "plugins" in path:
+                    click.echo("Invalid plugin configuration")
+                    click.echo()
+                    click.echo("Each plugin must have the following fields based on its type:")
+                    click.echo()
+                    click.echo("  - 'sk' plugins: source, path/url, type")
+                    click.echo("  - 'mcp' plugins: source, path/url, type, command, args")
+                    click.echo("  - 'agently' plugins: source, path/url, type, variables")
+                else:
+                    click.echo(message)
+            else:
+                # General error display
+                click.echo(message)
 
-                # Create message object
-                from agently.conversation.context import Message
-
-                message = Message(content=user_input, role="user")
-
-                # Process with continuous reasoning
-                click.echo("\nAssistant (thinking)> ", nl=False)
-
-                # Use our new continuous reasoning method
-                reasoning_chunks = []
-
-                # Define the async process function that we'll use with the event loop
-                async def process_message():
-                    async for chunk in agent.process_continuous_reasoning(message, context):
-                        reasoning_chunks.append(chunk)
-                        click.echo(chunk, nl=False)
-
-                # Run the coroutine inside the current event loop
-                loop = asyncio.get_event_loop()
-                loop.run_until_complete(process_message())
-
-                click.echo("\n")  # Add a newline after response
-
-            except KeyboardInterrupt:
-                logger.info("User interrupted with Ctrl+C")
-                click.echo("\nExiting...")
-                break
-            except Exception as e:
-                logger.exception(f"Error in interactive loop: {e}")
-                click.echo(f"\nError: {e}")
-
-        logger.info("Interactive loop with reasoning completed")
-    except Exception as e:
-        logger.exception(f"Error in interactive loop: {e}")
-        click.echo(f"\nError: {e}")
+            # Add a blank line between errors
+            click.echo()
+        except Exception as e:
+            # Fallback for error display
+            logger.debug(f"Error displaying validation error: {e}")
+            click.echo(
+                formatting.format_error(f"Error parsing validation message: {message if 'message' in locals() else str(e)}")
+            )
+            click.echo()

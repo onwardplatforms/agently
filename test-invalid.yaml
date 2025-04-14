@@ -1,0 +1,7 @@
+version: "1"
+agents:
+  - id: "test-agent"
+    name: "Test Agent"
+    model:
+      provider: "openai"
+      model: "gpt-4o"

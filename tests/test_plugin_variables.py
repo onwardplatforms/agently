@@ -51,21 +51,23 @@ def plugin_yaml_config():
         temp_file.write(
             b"""
 version: "1"
-name: "Plugin Variables Test Agent"
-description: "A test agent for plugin variables"
-system_prompt: "You are a test assistant."
-model:
-  provider: "openai"
-  model: "gpt-4o"
-  temperature: 0.7
-plugins:
-  local:
-    - source: "./mock_plugin_path"
-      variables:
-        string_var: "overridden string"
-        int_var: 100
-        bool_var: true
-        required_var: "provided value"
+agents:
+  - name: "Plugin Variables Test Agent"
+    description: "A test agent for plugin variables"
+    system_prompt: "You are a test assistant."
+    model:
+      provider: "openai"
+      model: "gpt-4o"
+      temperature: 0.7
+    plugins:
+      - source: "local"
+        type: "agently"
+        path: "./mock_plugin_path"
+        variables:
+          string_var: "overridden string"
+          int_var: 100
+          bool_var: true
+          required_var: "provided value"
 """
         )
     yield Path(temp_file.name)

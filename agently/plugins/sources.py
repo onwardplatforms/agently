@@ -326,6 +326,19 @@ class LocalPluginSource(PluginSource):
         plugin_class_with_attrs.namespace = self.namespace
         plugin_class_with_attrs.name = plugin_name
 
+        # Add logging to debug plugin type issues
+        logger.debug(f"Plugin type specified in source: {self.plugin_type}")
+        if hasattr(plugin_class, "get_plugin_type"):
+            logger.debug(f"Plugin class has get_plugin_type: {plugin_class.get_plugin_type()}")
+        else:
+            logger.debug("Plugin class does not have get_plugin_type method")
+
+        # Log all relevant attributes to diagnose 'agently' issue
+        logger.debug(f"Plugin class attributes: {dir(plugin_class)}")
+        logger.debug(f"Plugin class bases: {plugin_class.__bases__}")
+        if hasattr(plugin_class, "__module__"):
+            logger.debug(f"Plugin class module: {plugin_class.__module__}")
+
         # Note: We no longer update the lockfile here, as it's handled by the _initialize_plugins function
 
         logger.info(f"Successfully loaded plugin class: {plugin_class.__name__} as {self.namespace}/{plugin_name}")
@@ -506,8 +519,8 @@ class GitHubPluginSource(PluginSource):
 
                 # Update repo_url to ensure it has the correct format
                 if self.plugin_type == "mcp":
-                    # For MCP servers, use the original repo name
-                    self.repo_url = f"github.com/{self.namespace}/{original_repo_name}"
+                    # For MCP servers, use the original repo name and don't modify the namespace
+                    self.repo_url = f"github.com/{match.group(1)}/{original_repo_name}"
                 else:
                     # For SK plugins, use full_repo_name which may have the plugin prefix added
                     self.repo_url = f"github.com/{self.namespace}/{self.full_repo_name}"
@@ -565,10 +578,28 @@ class GitHubPluginSource(PluginSource):
 
         current_time = datetime.utcnow().isoformat()
 
+        # For MCP plugins, ensure we use the correct namespace from the repository URL
+        if self.plugin_type == "mcp":
+            # Extract the namespace from repo_url to ensure consistency
+            clean_url = re.sub(r"^https?://", "", self.repo_url)
+            clean_url = re.sub(r"^github\.com/", "", clean_url)
+            match = re.match(r"([^/]+)/([^/]+)", clean_url)
+            if match:
+                namespace = match.group(1)
+                repo_name = match.group(2)
+                full_name = f"{namespace}/{repo_name}"
+            else:
+                namespace = self.namespace
+                full_name = f"{self.namespace}/{self.name}"
+        else:
+            # For other plugin types, use the standard namespace and name
+            namespace = plugin_class.namespace
+            full_name = f"{self.namespace}/{self.name}"
+
         return {
-            "namespace": plugin_class.namespace,
+            "namespace": namespace,
             "name": plugin_class.name,
-            "full_name": f"{self.namespace}/{self.name}",
+            "full_name": full_name,
             "version": self.version,
             "source_type": "github",
             "plugin_type": self.plugin_type,  # Store plugin type (sk or mcp)
@@ -611,102 +642,148 @@ class GitHubPluginSource(PluginSource):
             ImportError: If the plugin cannot be imported
             ValueError: If the plugin is invalid
         """
-        # Ensure the cache directory exists
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            # Ensure the cache directory exists
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        # Determine the plugin directory name (repo name without prefix)
-        plugin_dir_name = self.name
+            logger.debug(f"Loading GitHub plugin: {self.name} from {self.repo_url}")
+            logger.debug(f"Cache directory: {self.cache_dir}")
+            logger.debug(f"Plugin type: {self.plugin_type}")
 
-        # Full path to the plugin directory
-        plugin_dir = self.cache_dir / plugin_dir_name
+            # Get the plugin directory - use _get_cache_path
+            cache_path = self._get_cache_path()
+            logger.debug(f"Cache path: {cache_path}")
 
-        # Clone or update the repository
-        self._clone_or_update_repo(plugin_dir)
+            # Clone or update the repository
+            logger.debug(f"Cloning or updating repository to {cache_path}")
+            self._clone_or_update_repo(cache_path)
+            logger.debug(f"Repository cloned/updated")
 
-        # For MCP servers, we don't need to load a plugin class
-        # We just return a special dummy class that satisfies the Plugin interface
-        if self.plugin_type == "mcp":
-            # Create a dynamic class that implements the Plugin interface
-            # for MCP servers. This serves as a placeholder until actual
-            # MCP server integration is handled by the agent.
-            from agently.plugins.base import Plugin
+            # For MCP plugin type, create a placeholder plugin class
+            if self.plugin_type == "mcp":
+                logger.debug(f"Creating MCP server plugin class for {self.name}")
 
-            class MCPServerPlugin(Plugin):
-                """Placeholder for MCP server plugin."""
+                # Create a new class for this MCP server plugin
+                class MCPServerPlugin(Plugin):
+                    """Placeholder for MCP server plugin."""
 
-                name = self.name
-                description = "MCP Server plugin"
-                namespace = self.namespace
-                plugin_instructions = "This plugin provides access to an MCP server."
+                    name = self.name
+                    description = "MCP Server plugin"
+                    namespace = self.namespace
+                    plugin_instructions = "This plugin provides access to an MCP server."
 
-                @classmethod
-                def get_kernel_functions(cls):
-                    """Return an empty dictionary since the actual functions are provided by the MCP server."""
-                    return {}
+                    @classmethod
+                    def get_kernel_functions(cls):
+                        """Return an empty dictionary for MCP server plugins."""
+                        return {}
 
-            return MCPServerPlugin
+                    @classmethod
+                    def get_mcp_command(cls, repo_path=None, **kwargs):
+                        """Return the MCP command for this plugin."""
+                        # Base command data
+                        command_data = {}
 
-        # Determine plugin module path within the repository
-        if self.plugin_path:
-            # Specific plugin path provided (can be a file or directory)
-            module_path = plugin_dir / self.plugin_path
-        else:
-            # Default: look for plugin code at the repository root
-            module_path = plugin_dir
+                        # Get the command from the plugin configuration
+                        if hasattr(cls, "mcp_command"):
+                            command_data["command"] = cls.mcp_command
+                        else:
+                            # Use the default command: python -m mcp_server_git.main
+                            command_data["command"] = "python"
+                            command_data["args"] = ["-m", "mcp_server_git.main"]
 
-        # Check if the module path exists
-        if not module_path.exists():
-            raise ImportError(f"Plugin path does not exist: {module_path}")
+                        # Update with kwargs if provided
+                        if kwargs:
+                            command_data.update(kwargs)
 
-        # Import the plugin module
-        if module_path.is_file() and module_path.suffix == ".py":
-            # Single file plugin
-            spec = importlib.util.spec_from_file_location(self.name, module_path)
-            if not spec or not spec.loader:
-                raise ImportError(f"Could not load plugin spec from: {module_path}")
+                        return command_data
 
-            module = importlib.util.module_from_spec(spec)
-            sys.modules[self.name] = module
-            spec.loader.exec_module(module)
-        elif module_path.is_dir() and (module_path / "__init__.py").exists():
-            # Package plugin
-            sys.path.insert(0, str(module_path.parent))
+                # Fix name clashes
+                MCPServerPlugin.__name__ = f"MCPServerPlugin_{self.name}"
+                MCPServerPlugin.__qualname__ = f"MCPServerPlugin_{self.name}"
+
+                logger.debug(f"Created MCP Server Plugin class: {MCPServerPlugin.__name__}")
+                return MCPServerPlugin
+
+            # For other plugin types, try to import from the repository
+            logger.debug(f"Importing plugin module from {cache_path}")
+
+            # Handle plugin path
+            if self.plugin_path:
+                plugin_dir = cache_path / self.plugin_path
+                logger.debug(f"Using plugin path: {plugin_dir}")
+            else:
+                plugin_dir = cache_path
+                logger.debug(f"Using repository root as plugin path: {plugin_dir}")
+
+            sys.path.insert(0, str(plugin_dir.parent))
+            plugin_dir_name = plugin_dir.name
+
             try:
-                module = importlib.import_module(module_path.name)
+                logger.debug(f"Attempting to import plugin module: {plugin_dir_name}")
+                plugin_module = importlib.import_module(plugin_dir_name)
+                logger.debug(f"Plugin module imported: {plugin_module}")
+
+                # Find the plugin class
+                plugin_class = None
+                for attr_name in dir(plugin_module):
+                    attr = getattr(plugin_module, attr_name)
+                    if inspect.isclass(attr) and issubclass(attr, Plugin) and attr != Plugin:
+                        plugin_class = attr
+                        logger.debug(f"Found plugin class: {plugin_class}")
+                        break
+
+                if plugin_class is None:
+                    # Try to find a module named "plugin.py" or similar
+                    logger.debug(f"No plugin class found in module, checking for plugin.py")
+                    for search_path in [
+                        plugin_dir / "plugin.py",
+                        plugin_dir / "plugins.py",
+                        plugin_dir / "sk_plugin.py",
+                        plugin_dir / "sk_plugins.py",
+                    ]:
+                        if search_path.exists():
+                            logger.debug(f"Found potential plugin file: {search_path}")
+                            module_name = f"{plugin_dir_name}.{search_path.stem}"
+                            try:
+                                logger.debug(f"Attempting to import: {module_name}")
+                                plugin_submodule = importlib.import_module(module_name)
+                                logger.debug(f"Plugin submodule imported: {plugin_submodule}")
+
+                                # Find the plugin class in the submodule
+                                for attr_name in dir(plugin_submodule):
+                                    attr = getattr(plugin_submodule, attr_name)
+                                    if inspect.isclass(attr) and issubclass(attr, Plugin) and attr != Plugin:
+                                        plugin_class = attr
+                                        logger.debug(f"Found plugin class in submodule: {plugin_class}")
+                                        break
+
+                                if plugin_class:
+                                    break
+                            except ImportError as e:
+                                logger.debug(f"Failed to import {module_name}: {e}")
+
+                if plugin_class:
+                    logger.debug(f"Successfully found plugin class: {plugin_class}")
+                    return plugin_class
+                else:
+                    error_msg = f"No plugin class found in {plugin_dir_name}"
+                    logger.error(error_msg)
+                    raise ValueError(error_msg)
+
+            except ImportError as e:
+                error_msg = f"Failed to import plugin: {e}"
+                logger.error(error_msg)
+                raise ImportError(error_msg)
             finally:
-                sys.path.pop(0)
-        else:
-            raise ImportError(f"Plugin path must be a .py file or directory with __init__.py: {module_path}")
+                # Remove the plugin directory from sys.path
+                try:
+                    sys.path.remove(str(plugin_dir.parent))
+                except ValueError:
+                    pass
 
-        # Find the plugin class
-        plugin_class = None
-        for item_name in dir(module):
-            item = getattr(module, item_name)
-
-            # Check if it's a Plugin subclass
-            if (
-                isinstance(item, type)
-                and item.__module__ == module.__name__
-                and hasattr(item, "name")
-                and hasattr(item, "description")
-                and hasattr(item, "plugin_instructions")
-                and hasattr(item, "get_kernel_functions")
-                and callable(getattr(item, "get_kernel_functions"))
-            ):
-                plugin_class = item
-                break
-
-        if not plugin_class:
-            raise ValueError(f"No Plugin class found in module: {module_path}")
-
-        # Set the namespace and name on the plugin class
-        plugin_class_with_attrs = cast(PluginClass, plugin_class)
-        plugin_class_with_attrs.namespace = self.namespace
-        plugin_class_with_attrs.name = self.name
-
-        # Note: We no longer update the lockfile here, as it's handled by the _initialize_plugins function
-
-        return plugin_class
+        except Exception as e:
+            logger.exception(f"Error loading GitHub plugin: {e}")
+            raise
 
     def _clone_or_update_repo(self, cache_path: Path) -> None:
         """Clone or update the repository to the cache directory."""
@@ -724,7 +801,16 @@ class GitHubPluginSource(PluginSource):
                     # It's a git repository, update it
                     logger.info(f"Repository already exists, updating from remote: {cache_path}")
                     # Fetch the latest changes
-                    subprocess.run(["git", "fetch", "origin"], cwd=cache_path, check=True, capture_output=True)
+                    try:
+                        fetch_result = subprocess.run(
+                            ["git", "fetch", "origin"], cwd=cache_path, check=True, capture_output=True, text=True
+                        )
+                        logger.debug(f"Git fetch output: {fetch_result.stdout}")
+                    except subprocess.CalledProcessError as fetch_error:
+                        logger.error(f"Git fetch failed: {fetch_error}")
+                        logger.error(f"Fetch output: {fetch_error.stdout}")
+                        logger.error(f"Fetch errors: {fetch_error.stderr}")
+                        raise RuntimeError(f"Failed to fetch updates for repository {self.repo_url}: {fetch_error.stderr}")
 
                     # Check out the specified version/branch/tag
                     self._checkout_version(cache_path)
@@ -746,13 +832,20 @@ class GitHubPluginSource(PluginSource):
             # Clone the repository
             logger.debug(f"Cloning repository: {self.repo_url}")
             git_url = f"https://{self.repo_url}"
+            logger.debug(f"Git URL: {git_url}")
 
             # First clone the repository
-            subprocess.run(
-                ["git", "clone", git_url, str(cache_path)],
-                check=True,
-                capture_output=True,
-            )
+            try:
+                clone_result = subprocess.run(
+                    ["git", "clone", git_url, str(cache_path)], check=True, capture_output=True, text=True
+                )
+                logger.debug(f"Git clone output: {clone_result.stdout}")
+            except subprocess.CalledProcessError as clone_error:
+                logger.error(f"Git clone failed: {clone_error}")
+                logger.error(f"Clone command: git clone {git_url} {str(cache_path)}")
+                logger.error(f"Clone output: {clone_error.stdout}")
+                logger.error(f"Clone errors: {clone_error.stderr}")
+                raise RuntimeError(f"Failed to clone repository {self.repo_url}: {clone_error.stderr}")
 
             # Check out the specified version/branch/tag
             self._checkout_version(cache_path)
@@ -767,6 +860,10 @@ class GitHubPluginSource(PluginSource):
             raise RuntimeError(f"Failed to clone repository {self.repo_url} at {self.version}: {error_msg}")
         except Exception as e:
             logger.error(f"Error during repository clone or update: {e}")
+            if hasattr(e, "__traceback__"):
+                import traceback
+
+                logger.error(f"Stack trace:\n{traceback.format_exc()}")
             raise RuntimeError(f"Failed to clone repository {self.repo_url} at {self.version}: {e}")
 
     def _checkout_version(self, repo_path: Path) -> None:

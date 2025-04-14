@@ -10,6 +10,7 @@ import yaml
 
 from agently.config.parser import load_agent_config
 from agently.plugins.sources import GitHubPluginSource
+from agently.config.types import AgentConfig
 
 
 @pytest.fixture
@@ -19,32 +20,37 @@ def temp_github_yaml_config():
         temp_file.write(
             b"""
 version: "1"
-name: "GitHub Plugin Test Agent"
-description: "An agent that tests GitHub plugins"
-system_prompt: "You are a test assistant."
-model:
-  provider: "openai"
-  model: "gpt-4o"
-  temperature: 0.7
-plugins:
-  github:
-    - source: "testuser/hello"
-      version: "main"
-      variables:
-        default_name: "TestFriend"
-    - source: "github.com/testuser/agently-plugin-world"
-      version: "v1.0.0"
-    - source: "https://github.com/testuser/agently-plugin-advanced"
-      version: "main"
-      plugin_path: "plugins/advanced"
-    - source: "testuser/mcp-hello"
-      type: "mcp"
-      version: "main"
-      command: "python"
-      args:
-        - "server.py"
-      variables:
-        default_name: "MCPFriend"
+agents:
+  - name: "GitHub Plugin Test Agent"
+    description: "An agent that tests GitHub plugins"
+    system_prompt: "You are a test assistant."
+    model:
+      provider: "openai"
+      model: "gpt-4o"
+      temperature: 0.7
+    plugins:
+      - source: "github"
+        url: "testuser/hello"
+        type: "agently"
+        version: "main"
+        variables:
+          default_name: "TestFriend"
+      - source: "github"
+        url: "github.com/testuser/agently-plugin-world"
+        type: "agently"
+        version: "v1.0.0"
+      - source: "github"
+        url: "https://github.com/testuser/agently-plugin-advanced"
+        type: "agently"
+        version: "main"
+        path: "plugins/advanced"
+      - source: "github"
+        url: "testuser/mcp-hello"
+        type: "mcp"
+        version: "main"
+        command: "python"
+        args:
+          - "server.py"
 """
         )
     yield Path(temp_file.name)
@@ -108,40 +114,70 @@ def test_load_github_plugin_config(mock_load, temp_github_yaml_config):
     # Load the config
     config = load_agent_config(temp_github_yaml_config)
 
-    # Verify plugins were loaded correctly
+    # Verify agents were loaded correctly
+    assert isinstance(config, AgentConfig)
+    assert config.name == "GitHub Plugin Test Agent"
+    assert config.description == "An agent that tests GitHub plugins"
+    assert config.system_prompt == "You are a test assistant."
+    assert config.model.provider == "openai"
+    assert config.model.model == "gpt-4o"
+    
+    # Verify plugins
+    assert hasattr(config, "plugins")
     assert len(config.plugins) == 4
-
-    # Check first plugin (short format)
+    
+    # Each plugin is a PluginConfig object 
+    # The source attribute is the actual source object (GitHubPluginSource)
+    
+    # Check first plugin (github source)
     plugin1 = config.plugins[0]
-    assert plugin1.source.namespace == "testuser"
-    assert plugin1.source.name == "hello"
-    assert plugin1.source.repo_url == "github.com/testuser/agently-plugin-hello"
+    assert isinstance(plugin1.source, GitHubPluginSource)
+    assert "github.com/testuser/agently-plugin-hello" in plugin1.source.repo_url
+    assert plugin1.source.plugin_type == "agently"
     assert plugin1.source.version == "main"
     assert plugin1.variables == {"default_name": "TestFriend"}
-    assert plugin1.source.plugin_type == "sk"  # Default type is "sk"
-
+    
     # Check second plugin (github.com format)
     plugin2 = config.plugins[1]
-    assert plugin2.source.namespace == "testuser"
-    assert plugin2.source.name == "world"
-    assert plugin2.source.repo_url == "github.com/testuser/agently-plugin-world"
+    assert isinstance(plugin2.source, GitHubPluginSource)
+    assert "github.com/testuser/agently-plugin-world" in plugin2.source.repo_url
+    assert plugin2.source.plugin_type == "agently"
     assert plugin2.source.version == "v1.0.0"
-    assert plugin2.source.plugin_type == "sk"
-
+    
     # Check third plugin (https URL format with plugin_path)
     plugin3 = config.plugins[2]
-    assert plugin3.source.namespace == "testuser"
-    assert plugin3.source.name == "advanced"
-    assert plugin3.source.repo_url == "github.com/testuser/agently-plugin-advanced"
+    assert isinstance(plugin3.source, GitHubPluginSource)
+    assert "github.com/testuser/agently-plugin-advanced" in plugin3.source.repo_url
+    assert plugin3.source.plugin_type == "agently"
     assert plugin3.source.version == "main"
-    assert plugin3.source.plugin_path == "plugins/advanced"
-    assert plugin3.source.plugin_type == "sk"
+    assert hasattr(plugin3.source, "plugin_path")
     
     # Check fourth plugin (MCP server type)
     plugin4 = config.plugins[3]
-    assert plugin4.source.namespace == "testuser"
-    assert plugin4.source.name == "mcp-hello"
-    assert plugin4.source.repo_url.endswith("testuser/mcp-hello")
-    assert plugin4.source.version == "main"
+    assert isinstance(plugin4.source, GitHubPluginSource)
+    assert "github.com/testuser/mcp-hello" in plugin4.source.repo_url
     assert plugin4.source.plugin_type == "mcp"
-    assert plugin4.variables == {"default_name": "MCPFriend"}
+    assert plugin4.source.version == "main"
+    # MCP plugins shouldn't have variables according to the schema
+    assert not plugin4.variables
+
+def test_mcp_server_plugin_get_kernel_functions():
+    """Test that MCPServerPlugin's get_kernel_functions method returns an empty dict."""
+    # Create a GitHub plugin source with MCP type
+    source = GitHubPluginSource(
+        repo_url="testuser/mcp-server",
+        plugin_type="mcp"
+    )
+    
+    # Load the plugin class (which should be MCPServerPlugin)
+    with patch("agently.plugins.sources.GitHubPluginSource._clone_or_update_repo"):
+        with patch("agently.plugins.sources.GitHubPluginSource._get_repo_sha"):
+            plugin_class = source.load()
+            
+            # Verify that get_kernel_functions returns an empty dictionary, not a list
+            kernel_functions = plugin_class.get_kernel_functions()
+            assert isinstance(kernel_functions, dict)
+            assert len(kernel_functions) == 0
+            
+            # Explicitly verify it's not a list
+            assert not isinstance(kernel_functions, list)

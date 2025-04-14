@@ -1,40 +1,86 @@
 # Multi-Agent Example
 
-This example demonstrates how to configure and use multiple agents within a single project. The configuration defines three specialized agents:
+This example demonstrates how to configure and use multiple agents within a single project with the new schema format. The configuration defines five specialized agents:
 
-1. **Research Agent** - Focuses on finding and analyzing information
-2. **Coding Agent** - Specializes in software development tasks
-3. **Creative Agent** - Excels at creative writing and idea generation
+1. **Research Agent** - Focuses on finding and analyzing information with deep reasoning (uses agently plugin type)
+2. **Coding Agent** - Specializes in software development tasks (uses sk plugin type)
+3. **Creative Agent** - Excels at creative writing and idea generation (uses agently plugin type)
+4. **DevOps Agent** - Handles deployment, infrastructure, and operations
+5. **MCP Agent** - Demonstrates MCP plugin configuration (commented out)
 
 ## Configuration
 
-The `agently.yaml` file defines multiple agents using the new multi-agent schema. Each agent has:
+The `agently.yaml` file defines multiple agents using the new schema format. Each agent has:
 
 - A unique identifier (`id`)
 - Name and description
-- Specialized system prompt
+- Specialized system prompt (optional)
 - Model configuration with appropriate parameters
-- Plugin configuration
+- Features configuration (optional)
+- Plugin configuration (flat array of plugins) if needed
 
 ```yaml
 version: "1"
+env:
+  OPENAI_API_KEY: ${{ env.OPENAI_API_KEY }}
+  
 agents:
   - id: "researcher"
     name: "Research Agent"
-    # ... other configuration
+    description: "Specializes in finding and analyzing information"
+    system_prompt: >
+      You are a research assistant with expertise in finding and analyzing information.
+      Focus on providing comprehensive, accurate information with proper citations.
+      When you don't know something, be transparent about the limits of your knowledge.
+    model:
+      provider: "openai"
+      model: "gpt-4o"
+      temperature: 0.2
+    features:
+      deep_reasoning: true
+    plugins:
+      - source: "local"
+        type: "agently"  # Use agently type when variables are needed
+        path: "../hello_local/plugins/hello"
+        variables:
+          default_name: "Researcher"
     
   - id: "coder"
     name: "Coding Agent"
+    description: "Specializes in writing and debugging code"
     # ... other configuration
-    
-  - id: "creative"
-    name: "Creative Agent"
-    # ... other configuration
-
-# Shared environment variables
-env:
-  OPENAI_API_KEY: ${{ env.OPENAI_API_KEY }}
+    plugins:
+      - source: "local"
+        type: "sk"  # Use sk type when no variables are needed
+        path: "../coder_agent/plugins/coder"
 ```
+
+### New Schema Features
+
+The updated schema introduces several improvements:
+
+1. **Flat Plugin Array**: Plugins are now specified as a flat array with clear type designation
+   ```yaml
+   plugins:
+     - source: "local"  # "local" or "github"
+       type: "sk"       # "sk", "mcp", or "agently"
+       path: "../path/to/plugin"
+   ```
+
+2. **Optional System Prompt**: The system prompt is now optional
+
+3. **Features Block**: Allows enabling special capabilities like deep reasoning
+   ```yaml
+   features:
+     deep_reasoning: true  # Enables step-by-step reasoning
+   ```
+
+4. **Plugin Type-Specific Fields**: Each plugin type requires specific fields:
+   - `sk` plugins: source and path/url (cannot have variables, command, or args)
+   - `mcp` plugins: source, path/url, command, and args (cannot have variables)
+   - `agently` plugins: source, path/url, and variables (cannot have command or args)
+
+> **Note**: This example demonstrates both the `sk` and `agently` plugin types. The `sk` type is used for plugins without configuration variables, while the `agently` type is used for plugins that need custom variables. The MCP plugin type is shown in the configuration examples but is commented out as it requires additional setup.
 
 ## Running the Example
 
