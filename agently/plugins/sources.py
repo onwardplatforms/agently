@@ -1,6 +1,7 @@
 """Plugin source handling system."""
 
 import importlib.util
+import inspect
 import json
 import logging
 import re
@@ -657,7 +658,7 @@ class GitHubPluginSource(PluginSource):
             # Clone or update the repository
             logger.debug(f"Cloning or updating repository to {cache_path}")
             self._clone_or_update_repo(cache_path)
-            logger.debug(f"Repository cloned/updated")
+            logger.debug("Repository cloned/updated")
 
             # For MCP plugin type, create a placeholder plugin class
             if self.plugin_type == "mcp":
@@ -734,7 +735,7 @@ class GitHubPluginSource(PluginSource):
 
                 if plugin_class is None:
                     # Try to find a module named "plugin.py" or similar
-                    logger.debug(f"No plugin class found in module, checking for plugin.py")
+                    logger.debug("No plugin class found in module, checking for plugin.py")
                     for search_path in [
                         plugin_dir / "plugin.py",
                         plugin_dir / "plugins.py",

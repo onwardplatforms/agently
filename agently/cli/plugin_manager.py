@@ -6,7 +6,7 @@ This module provides functions to handle plugin installation, updates, and remov
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, Optional, Tuple
 from uuid import uuid4
 
 from agently_sdk import styles
@@ -175,7 +175,8 @@ def process_github_plugin(
     namespace = plugin_config.get("namespace", "github")
 
     logger.debug(
-        f"Processing GitHub plugin: repo_url={repo_url}, plugin_type={plugin_type}, version={version}, branch={branch}, namespace={namespace}"
+        f"Processing GitHub plugin: repo_url={repo_url}, plugin_type={plugin_type}, "
+        f"version={version}, branch={branch}, namespace={namespace}"
     )
 
     github_source = GitHubPluginSource(
@@ -184,7 +185,8 @@ def process_github_plugin(
     plugin_key = f"{github_source.namespace}/{github_source.name}"
 
     logger.debug(
-        f"Created GitHubPluginSource with: namespace={github_source.namespace}, name={github_source.name}, plugin_key={plugin_key}"
+        f"Created GitHubPluginSource with: namespace={github_source.namespace}, "
+        f"name={github_source.name}, plugin_key={plugin_key}"
     )
     logger.debug(f"Full repo name: {github_source.full_repo_name}, repo_url: {github_source.repo_url}")
 
@@ -275,7 +277,7 @@ def process_github_plugin(
                     break
         else:
             lockfile["agents"][agent_id]["plugins"].append(plugin_info)
-            logger.debug(f"Added new plugin to lockfile")
+            logger.debug("Added new plugin to lockfile")
 
         # For MCP plugins, we always consider them successful even if they can't be fully initialized now
         if plugin_type == "mcp":
@@ -304,7 +306,8 @@ def process_github_plugin(
         # Debug info to understand the state of the plugin
         logger.error(f"Plugin key: {plugin_key}, plugin_type: {plugin_type}, namespace: {namespace}")
         logger.error(
-            f"GitHub source data: namespace={github_source.namespace}, name={github_source.name}, repo_url={github_source.repo_url}"
+            f"GitHub source data: namespace={github_source.namespace}, name={github_source.name}, "
+            f"repo_url={github_source.repo_url}"
         )
 
         if not quiet:

@@ -31,7 +31,7 @@ def load_lockfile() -> Dict[str, Any]:
     # Create or load the lockfile
     if not lockfile_path.exists():
         logger.info("Creating new lockfile")
-        lockfile = {"agents": {}}
+        lockfile: Dict[str, Any] = {"agents": {}}
     else:
         with open(lockfile_path, "r", encoding="utf-8") as f:
             try:

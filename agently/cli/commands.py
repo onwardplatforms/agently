@@ -6,23 +6,18 @@ This module defines the CLI commands and subcommands using Click.
 import json
 import logging
 import os
-import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
 
 import click
-import yaml
 
+from agently.cli import config, formatting, lockfile, plugin_manager
+from agently.cli.interactive import interactive_loop
 from agently.utils.logging import LogLevel, configure_logging
 from agently.version import __version__
 
 # Create a logger for this module
 logger = logging.getLogger(__name__)
-
-# Import our new modules
-from agently.cli import config, formatting, lockfile, plugin_manager
-from agently.cli.interactive import interactive_loop
 
 
 @click.group()
@@ -127,7 +122,7 @@ def init(agent_id=None, log_level=None, file=None, force=False, quiet=False):
                     }
 
         # Run the plugin initialization with quiet=True to suppress built-in output
-        stats = plugin_manager.sync_plugins(config_file, cfg, lock_data, agent_id, True, force)
+        plugin_manager.sync_plugins(config_file, cfg, lock_data, agent_id, True, force)
 
         # Save the updated lockfile
         lockfile.save_lockfile(lock_data)
@@ -517,7 +512,6 @@ def run(agent_id, log_level, file, force):
 @cli.group(help="List resources")
 def list():
     """List resources like agents and plugins."""
-    pass
 
 
 @list.command(name="agents", help="List configured agents")
@@ -623,7 +617,6 @@ def _validate_config_with_schema(cfg, schema_path):
         Tuple of (is_valid, errors), where errors is a list of error dictionaries with helpful messages
     """
     try:
-        import jsonschema
         from jsonschema import validators
 
         with open(schema_path, "r") as f:

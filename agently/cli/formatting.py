@@ -3,8 +3,6 @@
 This module provides functions for formatting output in the CLI.
 """
 
-from typing import List
-
 from agently_sdk import styles
 
 
