@@ -1,19 +1,24 @@
 {
-  "plugins": {
-    "sk": {
-      "onwardplatforms/hello": {
-        "namespace": "onwardplatforms",
-        "name": "hello",
-        "full_name": "onwardplatforms/hello",
-        "version": "main",
-        "source_type": "github",
-        "plugin_type": "sk",
-        "repo_url": "github.com/onwardplatforms/agently-plugin-hello",
-        "plugin_path": "",
-        "sha": "58ed33953eb4a59090588a27c0aee413fe604f7b",
-        "installed_at": "2025-04-10T21:04:25.352833"
-      }
-    },
-    "mcp": {}
+  "agents": {
+    "agent-1404e3a8": {
+      "name": "Hello Remote Agent",
+      "plugins": [
+        {
+          "namespace": "github",
+          "name": "hello",
+          "full_name": "github/hello",
+          "version": "main",
+          "source_type": "github",
+          "plugin_type": "agently",
+          "repo_url": "github.com/onwardplatforms/agently-plugin-hello",
+          "plugin_path": "",
+          "sha": "58ed33953eb4a59090588a27c0aee413fe604f7b",
+          "installed_at": "2025-04-14T05:58:04.949581",
+          "variables": {
+            "default_name": "Remote Friend"
+          }
+        }
+      ]
+    }
   }
 }

@@ -12,7 +12,7 @@
           "plugin_type": "agently",
           "source_path": "/Users/justinoconnor/Code/onward/agently/examples/multi_agent/../hello_local/plugins/hello",
           "sha": "fabe9c4c188f8c9199fd2dee88c861ceaa7f4ccf95a1c9b3fe072f546d3e0b91",
-          "installed_at": "2025-04-14T05:02:47.186184",
+          "installed_at": "2025-04-14T05:58:10.254228",
           "variables": {
             "default_name": "Researcher"
           }
@@ -31,7 +31,7 @@
           "plugin_type": "sk",
           "source_path": "/Users/justinoconnor/Code/onward/agently/examples/multi_agent/../coder_agent/plugins/coder",
           "sha": "34bbbb2de188c425513af4943b1387ef388a9ead282915322b15f8107095dd3f",
-          "installed_at": "2025-04-14T05:02:47.189033"
+          "installed_at": "2025-04-14T05:58:10.261005"
         }
       ]
     },
@@ -47,7 +47,7 @@
           "plugin_type": "agently",
           "source_path": "/Users/justinoconnor/Code/onward/agently/examples/multi_agent/../hello_local/plugins/hello",
           "sha": "fabe9c4c188f8c9199fd2dee88c861ceaa7f4ccf95a1c9b3fe072f546d3e0b91",
-          "installed_at": "2025-04-14T05:02:47.189621",
+          "installed_at": "2025-04-14T05:58:10.263473",
           "variables": {
             "default_name": "Creative"
           }
@@ -66,7 +66,7 @@
           "plugin_type": "agently",
           "source_path": "/Users/justinoconnor/Code/onward/agently/examples/multi_agent/../hello_local/plugins/hello",
           "sha": "fabe9c4c188f8c9199fd2dee88c861ceaa7f4ccf95a1c9b3fe072f546d3e0b91",
-          "installed_at": "2025-04-14T05:02:47.190160",
+          "installed_at": "2025-04-14T05:58:10.265082",
           "variables": {
             "default_name": "DevOps"
           }
@@ -86,7 +86,7 @@
           "repo_url": "github.com/modelcontextprotocol/servers",
           "plugin_path": "",
           "sha": "73869dd6dc4ff3ffa4b79e12ad6c8ad619ba3a96",
-          "installed_at": "2025-04-14T05:02:47.389388",
+          "installed_at": "2025-04-14T05:58:10.467666",
           "mcp_details": {
             "command": "uvx",
             "args": [
@@ -105,7 +105,7 @@
           "plugin_type": "agently",
           "source_path": "/Users/justinoconnor/Code/onward/agently/examples/multi_agent/../hello_local/plugins/hello",
           "sha": "fabe9c4c188f8c9199fd2dee88c861ceaa7f4ccf95a1c9b3fe072f546d3e0b91",
-          "installed_at": "2025-04-14T05:02:47.390756",
+          "installed_at": "2025-04-14T05:58:10.470341",
           "variables": {
             "default_name": "DevOps"
           }

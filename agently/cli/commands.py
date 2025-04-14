@@ -197,6 +197,15 @@ def _display_agent_plugins(cfg, agent_id, lock_data, old_agent_data=None):
     if "agents" in lock_data and agent_id in lock_data["agents"]:
         agent_lock_data = lock_data["agents"][agent_id]
 
+    # Debug: print all plugins in lockfile
+    if agent_lock_data and "plugins" in agent_lock_data:
+        logger.debug(f"Plugins in lockfile for agent {agent_id}:")
+        for idx, p in enumerate(agent_lock_data.get("plugins", [])):
+            logger.debug(
+                f"  Plugin #{idx+1}: name={p.get('name')}, type={p.get('plugin_type')}, source={p.get('source_type')}"
+            )
+            logger.debug(f"    repo_url={p.get('repo_url')}, namespace={p.get('namespace')}, full_name={p.get('full_name')}")
+
     # Get old plugin data
     old_plugins = []
     if old_agent_data and "plugins" in old_agent_data:
@@ -227,18 +236,35 @@ def _display_agent_plugins(cfg, agent_id, lock_data, old_agent_data=None):
                 elif plugin_version:
                     plugin_location += f" (v{plugin_version})"
 
+        logger.debug(
+            f"Processing config plugin: type={plugin_type}, source={plugin_source}, url={plugin_config.get('url', '')}"
+        )
+
         # Find matching plugin in current lockfile
         current_plugin = None
         if agent_lock_data and "plugins" in agent_lock_data:
             for p in agent_lock_data.get("plugins", []):
                 # Match based on type, namespace/source, and path/url
-                if (
-                    p.get("plugin_type") == plugin_type
-                    and _plugin_source_matches(p, plugin_source)
-                    and _plugin_path_matches(p, plugin_config)
-                ):
+                logger.debug(
+                    f"Checking lockfile plugin: {p.get('name')} of type {p.get('plugin_type')} "
+                    f"against config plugin: {plugin_type}"
+                )
+
+                source_match = _plugin_source_matches(p, plugin_source)
+                path_match = _plugin_path_matches(p, plugin_config)
+                logger.debug(f"  Source match: {source_match}, Path match: {path_match}")
+
+                if p.get("plugin_type") == plugin_type and source_match and path_match:
+                    logger.debug(f"  Found matching plugin in lockfile: {p.get('name')}")
                     current_plugin = p
                     break
+                else:
+                    logger.debug(
+                        "  No match: "
+                        f"plugin_type={p.get('plugin_type') == plugin_type}, "
+                        f"source={source_match}, "
+                        f"path={path_match}"
+                    )
 
         # Find matching plugin in old lockfile
         old_plugin = None
@@ -258,6 +284,7 @@ def _display_agent_plugins(cfg, agent_id, lock_data, old_agent_data=None):
 
         if not old_plugin and current_plugin:
             # Plugin wasn't in old lockfile but is in current: added
+            logger.debug("Plugin status: added (not in old lockfile but in current)")
             status_text = "was added"
             status_style = formatting.styles.green
         elif old_plugin and current_plugin:
@@ -265,10 +292,21 @@ def _display_agent_plugins(cfg, agent_id, lock_data, old_agent_data=None):
             old_sha = old_plugin.get("sha", "")
             current_sha = current_plugin.get("sha", "")
             if old_sha != current_sha:
+                logger.debug("Plugin status: updated (SHA changed from {old_sha} to {current_sha})")
                 status_text = "was updated"
                 status_style = formatting.styles.yellow
+            else:
+                logger.debug("Plugin status: unchanged (SHA remains {current_sha})")
         elif not current_plugin:
             # Plugin is in config but not in lockfile: failed
+            logger.debug("Plugin status: failed (plugin is in config but not found in lockfile)")
+            logger.debug(f"Config plugin: type={plugin_type}, source={plugin_source}, location={plugin_location}")
+            if agent_lock_data and "plugins" in agent_lock_data:
+                logger.debug(f"Lockfile plugins: {len(agent_lock_data['plugins'])} entries")
+                for i, p in enumerate(agent_lock_data.get("plugins", [])):
+                    logger.debug(
+                        f"  Plugin {i+1}: type={p.get('plugin_type')}, source={p.get('source_type')}, name={p.get('name')}"
+                    )
             status_text = "failed to initialize"
             status_style = formatting.styles.red
 
@@ -282,6 +320,8 @@ def _plugin_source_matches(lock_plugin, source):
     """Check if the plugin source in lockfile matches the source in config."""
     namespace = lock_plugin.get("namespace", "")
     source_type = lock_plugin.get("source_type", "")
+
+    logger.debug(f"  Checking source match: namespace={namespace}, source_type={source_type} against source={source}")
 
     # Local plugin with namespace "local" matches source "local"
     if namespace == "local" and source == "local":
@@ -308,20 +348,78 @@ def _plugin_path_matches(lock_plugin, plugin_config):
         url = plugin_config["url"]
         repo_url = lock_plugin.get("repo_url", "")
 
+        # If either value is missing, we can't match
+        if not url or not repo_url:
+            logger.debug("  URL match failure: url or repo_url is missing")
+            return False
+
         # Clean up the URLs for comparison
         clean_url = url.replace("github.com/", "").strip("/")
         clean_repo_url = repo_url.replace("github.com/", "").strip("/")
 
+        logger.debug(f"  Comparing URLs: config={clean_url}, lockfile={clean_repo_url}")
+
         # Compare the URLs directly (namespace/repo format)
         if clean_url == clean_repo_url:
+            logger.debug(f"  URL match direct: {clean_url} == {clean_repo_url}")
             return True
 
-        # If they don't match directly, check if the repo name matches
-        # This handles the case where the URL format might differ but repo is the same
+        # Check for repository name match, ignoring owner/namespace
+        try:
+            url_parts = clean_url.split("/")
+            repo_url_parts = clean_repo_url.split("/")
+
+            # Extract the repository name (last part) from both URLs
+            url_repo = url_parts[-1] if len(url_parts) > 0 else ""
+            repo_url_repo = repo_url_parts[-1] if len(repo_url_parts) > 0 else ""
+
+            logger.debug(f"  URL parts: config={url_parts}, lockfile={repo_url_parts}")
+            logger.debug(f"  URL repos: config={url_repo}, lockfile={repo_url_repo}")
+
+            # If last parts match, check if it's the lock plugin's name
+            if url_repo and repo_url_repo and url_repo == repo_url_repo:
+                logger.debug(f"  URL match by repo: {url_repo} == {repo_url_repo}")
+                return True
+        except Exception as e:
+            logger.debug(f"  Error in URL part matching: {e}")
+            pass
+
+        # If they don't match directly, check if the repo name matches the plugin name
         lock_name = lock_plugin.get("name", "")
-        url_parts = clean_url.split("/")
-        if len(url_parts) > 1 and url_parts[-1] == lock_name:
+        if lock_name:
+            # Check if the last part of the URL matches the plugin name
+            url_parts = clean_url.split("/")
+            logger.debug(
+                f"  Checking if URL last part '{url_parts[-1] if url_parts else 'None'}' matches lock_name '{lock_name}'"
+            )
+            if len(url_parts) > 0 and url_parts[-1] == lock_name:
+                logger.debug(f"  URL match by name: {url_parts[-1]} == {lock_name}")
+                return True
+
+            # Check if the repo URL contains the plugin name
+            if lock_name in clean_repo_url:
+                logger.debug(f"  URL match by name in URL: {lock_name} in {clean_repo_url}")
+                return True
+
+        # Add more flexible matching for different URL formats
+        # Check if one is a subset of the other
+        if clean_url in clean_repo_url or clean_repo_url in clean_url:
+            logger.debug("  URL match by substring")
             return True
+
+        # Check if they match when removing agently-plugin- prefix
+        if clean_url.replace("agently-plugin-", "") == clean_repo_url.replace("agently-plugin-", ""):
+            logger.debug("  URL match when removing plugin prefix")
+            return True
+
+        # Add more flexible matching for different URL formats
+        # Check if the URLs match when stripping different prefixes
+        if clean_url.replace("onwardplatforms/", "") == clean_repo_url.replace("onwardplatforms/", ""):
+            logger.debug("  URL match when removing organization prefix")
+            return True
+
+        # Log URLs that don't match for debugging
+        logger.debug(f"  URL no match: config={clean_url}, lockfile={clean_repo_url}")
 
     return False
 

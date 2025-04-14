@@ -1,20 +1,17 @@
 version: "1"
-id: "hello-goodbye-agent"
-name: "Hello-Goodbye Agent"
-description: "An agent that can say hello and goodbye"
-system_prompt: "You are a friendly assistant that helps users test the Hello-Goodbye MCP server. You can say hello and goodbye to users by using the functions provided by the MCP server."
 
-model:
-  provider: "openai"
-  model: "gpt-4o"
-  temperature: 0.7
-
-# MCP server configuration
-mcp_servers:
-  local:
-    - name: "hellogoodbye"
-      description: "A server that can say hello and goodbye to users"
-      source: "servers/hello_goodbye_server.py"
-      type: "mcp"
-      command: "python"
-      args: ["servers/hello_goodbye_server.py"]
+agents:
+  - id: "hello-goodbye-agent"
+    name: "Hello-Goodbye Agent"
+    description: "An agent that can say hello and goodbye"
+    system_prompt: "You are a friendly assistant that helps users test the Hello-Goodbye MCP server. You can say hello and goodbye to users by using the functions provided by the MCP server."
+    model:
+      provider: "openai"
+      model: "gpt-4o"
+      temperature: 0.7
+    plugins:
+      - source: "local"
+        type: "mcp"
+        path: "servers/hello_goodbye_server.py"
+        command: "python"
+        args: ["servers/hello_goodbye_server.py"]

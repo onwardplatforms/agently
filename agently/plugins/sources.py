@@ -459,6 +459,8 @@ class GitHubPluginSource(PluginSource):
 
         # Initialize full_repo_name to ensure it always exists
         self.full_repo_name = ""
+        # Store the original owner for URL construction
+        self.repo_owner = ""
 
         # Set default cache directory based on plugin type
         if self.cache_dir is None:
@@ -485,7 +487,10 @@ class GitHubPluginSource(PluginSource):
             # Now we should have user/repo format
             match = re.match(r"([^/]+)/([^/]+)", clean_url)
             if match:
-                # Extract namespace (user/org)
+                # Extract owner (user/org)
+                self.repo_owner = match.group(1)
+
+                # Set namespace if not provided
                 if not self.namespace:
                     self.namespace = match.group(1)
 
@@ -518,13 +523,15 @@ class GitHubPluginSource(PluginSource):
                             self.name = repo_name[len(self.PLUGIN_PREFIX) :]
                             self.full_repo_name = repo_name
 
-                # Update repo_url to ensure it has the correct format
+                # IMPORTANT: Update repo_url to preserve the original owner
+                # instead of using namespace which might be different
                 if self.plugin_type == "mcp":
-                    # For MCP servers, use the original repo name and don't modify the namespace
-                    self.repo_url = f"github.com/{match.group(1)}/{original_repo_name}"
+                    # For MCP servers, use the original repo name and owner
+                    self.repo_url = f"github.com/{self.repo_owner}/{original_repo_name}"
                 else:
                     # For SK plugins, use full_repo_name which may have the plugin prefix added
-                    self.repo_url = f"github.com/{self.namespace}/{self.full_repo_name}"
+                    # but keep the original owner
+                    self.repo_url = f"github.com/{self.repo_owner}/{self.full_repo_name}"
             else:
                 raise ValueError(
                     f"Invalid GitHub repository format: {self.repo_url}. Expected format: user/name or github.com/user/name"
@@ -724,13 +731,30 @@ class GitHubPluginSource(PluginSource):
                 plugin_module = importlib.import_module(plugin_dir_name)
                 logger.debug(f"Plugin module imported: {plugin_module}")
 
-                # Find the plugin class
+                # Find the plugin class - look for both regular Plugin inheritance
+                # and Agently SDK Plugin classes
                 plugin_class = None
                 for attr_name in dir(plugin_module):
                     attr = getattr(plugin_module, attr_name)
-                    if inspect.isclass(attr) and issubclass(attr, Plugin) and attr != Plugin:
+
+                    # Check if it's a class
+                    if not inspect.isclass(attr):
+                        continue
+
+                    # Option 1: Check if it's a subclass of our Plugin class
+                    if issubclass(attr, Plugin) and attr != Plugin:
                         plugin_class = attr
-                        logger.debug(f"Found plugin class: {plugin_class}")
+                        logger.debug(f"Found plugin class via inheritance: {plugin_class}")
+                        break
+
+                    # Option 2: Check if it's an Agently SDK Plugin class
+                    # Look for the commonly used naming pattern and required attributes
+                    if "Plugin" in attr_name and hasattr(attr, "name") and hasattr(attr, "description"):
+                        logger.debug(f"Found Agently SDK plugin class: {attr}")
+
+                        # Create a wrapper Plugin class
+                        plugin_class = self._create_sdk_plugin_wrapper(attr)
+                        logger.debug(f"Created wrapper for SDK plugin: {plugin_class.__name__}")
                         break
 
                 if plugin_class is None:
@@ -750,12 +774,27 @@ class GitHubPluginSource(PluginSource):
                                 plugin_submodule = importlib.import_module(module_name)
                                 logger.debug(f"Plugin submodule imported: {plugin_submodule}")
 
-                                # Find the plugin class in the submodule
+                                # Find the plugin class in the submodule - both types
                                 for attr_name in dir(plugin_submodule):
                                     attr = getattr(plugin_submodule, attr_name)
-                                    if inspect.isclass(attr) and issubclass(attr, Plugin) and attr != Plugin:
+
+                                    # Check if it's a class
+                                    if not inspect.isclass(attr):
+                                        continue
+
+                                    # Option 1: Check if it's a subclass of our Plugin class
+                                    if issubclass(attr, Plugin) and attr != Plugin:
                                         plugin_class = attr
-                                        logger.debug(f"Found plugin class in submodule: {plugin_class}")
+                                        logger.debug(f"Found plugin class via inheritance in submodule: {plugin_class}")
+                                        break
+
+                                    # Option 2: Check if it's an Agently SDK Plugin class
+                                    if "Plugin" in attr_name and hasattr(attr, "name") and hasattr(attr, "description"):
+                                        logger.debug(f"Found Agently SDK plugin class in submodule: {attr}")
+
+                                        # Create a wrapper Plugin class
+                                        plugin_class = self._create_sdk_plugin_wrapper(attr)
+                                        logger.debug(f"Created wrapper for SDK plugin in submodule: {plugin_class.__name__}")
                                         break
 
                                 if plugin_class:
@@ -949,3 +988,61 @@ class GitHubPluginSource(PluginSource):
             A SHA string representing the plugin's current state
         """
         return self._get_current_sha()
+
+    def _create_sdk_plugin_wrapper(self, attr: Any) -> Type[Plugin]:
+        """Create a wrapper for an Agently SDK Plugin class.
+
+        Args:
+            attr: The original plugin class to wrap
+
+        Returns:
+            A wrapper class that inherits from Plugin
+        """
+
+        class AgentlySdkPluginWrapper(Plugin):
+            """Wrapper for Agently SDK Plugin classes."""
+
+            # Copy over key attributes
+            name = getattr(attr, "name", self.name)
+            description = getattr(attr, "description", "")
+            namespace = self.namespace
+            plugin_instructions = getattr(attr, "plugin_instructions", "")
+
+            # Keep reference to original class
+            _original_class = attr
+
+            @classmethod
+            def get_kernel_functions(cls):
+                """Return kernel functions from the SDK plugin."""
+                # For compatibility with semantic_kernel plugins
+                return {}
+
+            def __init__(self, **kwargs):
+                """Initialize the wrapper and the original plugin class.
+
+                This forwards kwargs to the original plugin class.
+                """
+                # Initialize the Plugin base class
+                super().__init__()
+
+                # Create an instance of the original plugin class with the provided kwargs
+                self._original_instance = self._original_class(**kwargs)
+
+                # Copy any other attributes from the original instance
+                for attr_name in dir(self._original_instance):
+                    if not attr_name.startswith("__") and not hasattr(self, attr_name):
+                        setattr(self, attr_name, getattr(self._original_instance, attr_name))
+
+        # Copy over any variables from the original class for proper initialization
+        for attr_name in dir(attr):
+            # Look for PluginVariable attributes from the SDK
+            if hasattr(attr, attr_name) and attr_name != "name" and not attr_name.startswith("__"):
+                var_attr = getattr(attr, attr_name)
+                if hasattr(var_attr, "type") and hasattr(var_attr, "description"):
+                    # This looks like a PluginVariable - add it to the wrapper class
+                    logger.debug(f"Adding plugin variable from SDK class: {attr_name}")
+                    setattr(AgentlySdkPluginWrapper, attr_name, None)  # Create the attribute
+
+        # Set class name
+        AgentlySdkPluginWrapper.__name__ = attr.__name__ + "Wrapper"
+        return AgentlySdkPluginWrapper

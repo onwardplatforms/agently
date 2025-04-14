@@ -51,31 +51,37 @@ Here's an example of a more complex agent configuration using both local and Git
 
 ```yaml
 version: "1"
-name: "Multi-Plugin Agent"
-description: "An agent that uses multiple plugins from different sources"
-system_prompt: "You are a helpful assistant with access to several tools."
-model:
-  provider: "openai"
-  model: "gpt-4o"
-  temperature: 0.7
-plugins:
-  local:
-    - source: "./plugins/hello"
-      variables:
-        default_name: "Friend"
-    - source: "./plugins/calculator"
-      variables:
-        precision: 2
-  github:
-    - source: "example/weather-plugin"
-      version: "v1.0.0"
-      plugin_path: "plugins/weather"
-      variables:
-        api_key: "${{ env.WEATHER_API_KEY }}"
-        units: "metric"
+
+agents:
+  - name: "Multi-Plugin Agent"
+    description: "An agent that uses multiple plugins from different sources"
+    system_prompt: "You are a helpful assistant with access to several tools."
+    model:
+      provider: "openai"
+      model: "gpt-4o"
+      temperature: 0.7
+    plugins:
+      - source: "local"
+        type: "agently"
+        path: "./plugins/hello"
+        variables:
+          default_name: "Friend"
+      - source: "local"
+        type: "agently"
+        path: "./plugins/calculator"
+        variables:
+          precision: 2
+      - source: "github"
+        type: "agently"
+        url: "example/weather-plugin"
+        version: "v1.0.0"
+        variables:
+          api_key: "${{ env.WEATHER_API_KEY }}"
+          units: "metric"
+
 env:
   OPENAI_API_KEY: ${{ env.OPENAI_API_KEY }}
   WEATHER_API_KEY: ${{ env.WEATHER_API_KEY }}
 ```
 
-This structure makes it easy to organize plugins by their source type while still allowing multiple plugins of each type.
+This structure has a flat array of plugins within each agent, with each plugin specifying its source type and other properties according to the schema.
