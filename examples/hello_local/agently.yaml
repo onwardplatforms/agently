@@ -1,7 +1,8 @@
 version: "1"
 
 agents:
-  - name: "Hello Agent"
+  - id: "hello_agent"
+    name: "Hello Agent"
     description: "A simple agent that demonstrates plugin usage"
     system_prompt: >
       You are a friendly assistant that helps with greetings.

@@ -256,6 +256,73 @@ class LocalPluginSource(PluginSource):
             # For local plugins, reinstallation just means reloading the module
             # We don't need to do anything special here since we'll reload it anyway
 
+        # For MCP plugin type, create a placeholder plugin class instead of looking for one in the module
+        if self.plugin_type == "mcp":
+            logger.debug(f"Creating MCP server plugin class for local plugin: {plugin_name}")
+            
+            # We still need to load the module to verify it exists and is executable
+            if path.is_file() and path.suffix == ".py":
+                module_path = path
+                module_name = path.stem
+                logger.info(f"Verifying MCP server Python file: {module_path}")
+            elif path.is_dir() and (path / "__init__.py").exists():
+                module_path = path / "__init__.py"
+                module_name = path.name
+                logger.info(f"Verifying MCP server directory with __init__.py: {module_path}")
+            else:
+                logger.error(f"MCP server path must be a .py file or directory with __init__.py: {path}")
+                raise ImportError(f"MCP server path must be a .py file or directory with __init__.py: {path}")
+
+            # Import the module to verify it exists and is executable
+            logger.debug(f"Creating module spec from file: {module_path}")
+            spec = importlib.util.spec_from_file_location(module_name, module_path)
+            if not spec or not spec.loader:
+                logger.error(f"Could not load MCP server spec from: {module_path}")
+                raise ImportError(f"Could not load MCP server spec from: {module_path}")
+
+            logger.debug(f"Creating module from spec: {spec}")
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+
+            logger.debug(f"Executing module: {module_name}")
+            try:
+                spec.loader.exec_module(module)
+                logger.info(f"Module executed successfully: {module_name}")
+            except Exception as e:
+                logger.error(f"Error executing module {module_name}: {e}", exc_info=e)
+                raise ImportError(f"Error executing module {module_name}: {e}") from e
+
+            # Create a new class for this MCP server plugin
+            class MCPServerPlugin(Plugin):
+                """Placeholder for MCP server plugin."""
+
+                name = plugin_name
+                description = "MCP Server plugin"
+                namespace = self.namespace
+                plugin_instructions = "This plugin provides access to an MCP server."
+
+                @classmethod
+                def get_kernel_functions(cls):
+                    """Return an empty dictionary for MCP server plugins."""
+                    return {}
+
+                @classmethod
+                def get_mcp_command(cls, **kwargs):
+                    """Return the MCP command for this plugin."""
+                    # Use the path and information from the plugin configuration
+                    return {
+                        "path": str(path),
+                        "is_local": True
+                    }
+
+            # Fix name clashes
+            MCPServerPlugin.__name__ = f"MCPServerPlugin_{plugin_name}"
+            MCPServerPlugin.__qualname__ = f"MCPServerPlugin_{plugin_name}"
+
+            logger.debug(f"Created MCP Server Plugin class: {MCPServerPlugin.__name__}")
+            return MCPServerPlugin
+
+        # For non-MCP plugins, look for a Plugin subclass in the module
         if path.is_file() and path.suffix == ".py":
             module_path = path
             module_name = path.stem

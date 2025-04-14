@@ -1,7 +1,8 @@
 version: "1"
 
 agents:
-  - name: "Git MCP Agent"
+  - id: "git_mcp_agent"
+    name: "Git MCP Agent"
     system_prompt: "You are a helpful assistant that can interact with Git repositories. Use the Git tools available to you to help the user manage their repository."
     model:
       provider: openai

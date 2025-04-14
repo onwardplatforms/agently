@@ -1,0 +1,23 @@
+{
+  "agents": {
+    "hello_agent": {
+      "name": "Hello Agent",
+      "plugins": [
+        {
+          "namespace": "local",
+          "name": "hello",
+          "full_name": "hello",
+          "version": "local",
+          "source_type": "local",
+          "plugin_type": "agently",
+          "source_path": "/Users/justinoconnor/Code/onward/agently/examples/hello_local/plugins/hello",
+          "sha": "fabe9c4c188f8c9199fd2dee88c861ceaa7f4ccf95a1c9b3fe072f546d3e0b91",
+          "installed_at": "2025-04-14T19:50:48.496190",
+          "variables": {
+            "default_name": "Friend"
+          }
+        }
+      ]
+    }
+  }
+}

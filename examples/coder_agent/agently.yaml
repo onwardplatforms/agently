@@ -1,7 +1,8 @@
 version: "1"
 
 agents:
-  - name: "Code Assistant"
+  - id: "coder"
+    name: "Code Assistant"
     description: "An agent that helps with coding tasks using multi-step reasoning"
     system_prompt: >
       You are a skilled software developer assistant that helps with coding tasks.
@@ -24,7 +25,7 @@ agents:
       temperature: 0.2
       max_tokens: 4000
     features:
-      continuous_reasoning: true
+      deep_reasoning: true
     plugins:
       - source: "local"
         type: "agently"

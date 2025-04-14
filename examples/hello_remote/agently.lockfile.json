@@ -1,6 +1,6 @@
 {
   "agents": {
-    "agent-1404e3a8": {
+    "hello_remote_agent": {
       "name": "Hello Remote Agent",
       "plugins": [
         {
@@ -13,7 +13,7 @@
           "repo_url": "github.com/onwardplatforms/agently-plugin-hello",
           "plugin_path": "",
           "sha": "58ed33953eb4a59090588a27c0aee413fe604f7b",
-          "installed_at": "2025-04-14T05:58:04.949581",
+          "installed_at": "2025-04-14T19:51:21.054815",
           "variables": {
             "default_name": "Remote Friend"
           }
